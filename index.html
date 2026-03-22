@@ -673,8 +673,9 @@ function updateFPS(ts){
 // settings loaded after game script starts
 
 // =====================================================
-const SERVER_URL = 'https://slimey-server.onrender.com'; // <-- CHANGE THIS when deployed
+const SERVER_URL = 'https://slimey-server.onrender.com/'; // <-- CHANGE THIS when deployed
 const FOREST_SERVERS = new Set(['official-na-west-1','official-eu-west-2','official-asia-1','custom-slimewars','custom-nostorm']);
+const SNOW_SERVERS = new Set(['official-na-east-2','official-eu-west-1','ranked-na-east-1','custom-scrim','custom-nostorm2']);
 
 // =====================================================
 // SOCKET CONNECTION
@@ -767,7 +768,7 @@ function renderServerList() {
     const full = srv.playerCount >= srv.maxP;
     row.className = 'server-row'+(tag==='official'?' featured':'');
     row.innerHTML = `
-      <div class="srv-name">${srv.name} <span class="srv-tag ${tagClass}">${tagLabel}</span>${FOREST_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(46,204,113,0.15);color:#2ecc71;border:1px solid rgba(46,204,113,0.4)">🌲 FOREST</span>':''}${srv.gameActive?'<span class="srv-tag" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)">IN GAME</span>':''}</div>
+      <div class="srv-name">${srv.name} <span class="srv-tag ${tagClass}">${tagLabel}</span>${FOREST_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(46,204,113,0.15);color:#2ecc71;border:1px solid rgba(46,204,113,0.4)">🌲 FOREST</span>':''}${SNOW_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(174,214,241,0.2);color:#aed6f1;border:1px solid rgba(174,214,241,0.4)">❄️ SNOW</span>':''}${srv.gameActive?'<span class="srv-tag" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)">IN GAME</span>':''}</div>
       <div class="srv-region">${srv.region}</div>
       <div class="srv-players"><span class="cnt">${srv.playerCount}</span><span class="max">/${srv.maxP}</span></div>
       <div class="srv-ping ${pingClass}">${ping}${typeof ping==='number'?'ms':''}</div>
@@ -1231,8 +1232,157 @@ function generateForest(seed=42){
   }
 }
 
+// ---- DESTRUCTIBLE BARRICADES ----
+// Each barricade has hp, starts at 3 hits
+// Added when barricades are created
+
+// ---- LOOT CRATES ----
+let lootCrates=[]; // {x,y,r,hp,opened,loot[]}
+
+// ---- HOUSES ----
+let houses=[]; // {x,y,w,h,doorX,doorY,doorW,doorH,color}
+
+// ---- WEATHER ----
+let weatherType='none'; // 'none','snow','fog','rain'
+let weatherParticles=[];
+let weatherIntensity=0;
+
+function generateSnow(seed=42){
+  const rng=seededRand(seed);
+  buildings=[];roads=[];lootSpawns=[];barriacades=[];lootCrates=[];houses=[];
+  const BLOCK=320,GAP=70;
+  const cols=Math.floor(MAP_W/(BLOCK+GAP));
+  const rows=Math.floor(MAP_H/(BLOCK+GAP));
+  const SNOW_COLORS=['#2e4057','#1a3a5c','#1a2a3a','#203040','#2c3e50','#264653'];
+  // Frozen buildings
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const bx=c*(BLOCK+GAP)+GAP,by=r*(BLOCK+GAP)+GAP;
+    const div=rng()<0.35?4:(rng()<0.45?2:1);
+    if(div===1){
+      const w=BLOCK-20,h=BLOCK-20,x=bx+10,y=by+10;
+      const fl=Math.floor(rng()*3)+1;
+      buildings.push({x,y,w,h,floors:fl,color:SNOW_COLORS[Math.floor(rng()*SNOW_COLORS.length)],roofColor:'#e8f4f8',windowColor:'rgba(180,220,255,0.5)',snowCap:true});
+      if(rng()<0.6)lootSpawns.push({x:x+rng()*w,y:y+rng()*h});
+    }else if(div===2){
+      const vert=rng()<0.5;
+      for(let d=0;d<2;d++){
+        let x,y,w,h;
+        if(vert){x=bx+10+d*(BLOCK/2);y=by+10;w=BLOCK/2-15;h=BLOCK-20;}
+        else{x=bx+10;y=by+10+d*(BLOCK/2);w=BLOCK-20;h=BLOCK/2-15;}
+        buildings.push({x,y,w,h,floors:1,color:SNOW_COLORS[Math.floor(rng()*SNOW_COLORS.length)],roofColor:'#e8f4f8',windowColor:'rgba(180,220,255,0.5)',snowCap:true});
+        if(rng()<0.6)lootSpawns.push({x:x+rng()*w,y:y+rng()*h});
+      }
+    }else{
+      for(let d=0;d<4;d++){
+        const qx=bx+10+(d%2)*(BLOCK/2),qy=by+10+Math.floor(d/2)*(BLOCK/2),w=BLOCK/2-15,h=BLOCK/2-15;
+        buildings.push({x:qx,y:qy,w,h,floors:1,color:SNOW_COLORS[Math.floor(rng()*SNOW_COLORS.length)],roofColor:'#e8f4f8',windowColor:'rgba(180,220,255,0.5)',snowCap:true});
+        if(rng()<0.5)lootSpawns.push({x:qx+rng()*w,y:qy+rng()*h});
+      }
+    }
+  }
+  // Frozen roads
+  for(let r=0;r<=rows;r++)roads.push({x:0,y:r*(BLOCK+GAP),w:MAP_W,h:GAP,horiz:true});
+  for(let c=0;c<=cols;c++)roads.push({x:c*(BLOCK+GAP),y:0,w:GAP,h:MAP_H,horiz:false});
+  // Ice barricades
+  for(let i=0;i<70;i++){
+    const x=rng()*(MAP_W-80)+40,y=rng()*(MAP_H-80)+40;
+    if(!isInsideBuilding(x,y,35,25))
+      barriacades.push({x,y,w:rng()<0.5?70:22,h:rng()<0.5?22:70,hp:3,maxHp:3,isIce:true});
+  }
+  // Loot crates in open areas
+  for(let i=0;i<20;i++){
+    const x=100+rng()*(MAP_W-200),y=100+rng()*(MAP_H-200);
+    if(!isInsideBuilding(x,y,30,30)&&!isSolidAt(x,y,30))
+      lootCrates.push({x,y,r:22,hp:3,maxHp:3,opened:false,loot:[]});
+  }
+  weatherType='snow';
+}
+
+function spawnWeatherParticles(){
+  if(weatherType==='none'){weatherParticles=[];return;}
+  const count=weatherType==='snow'?3:weatherType==='rain'?6:1;
+  for(let i=0;i<count;i++){
+    if(weatherType==='snow') weatherParticles.push({x:cam.x+Math.random()*(canvas.width/scopeZoom),y:cam.y-10,vx:(Math.random()-0.5)*20,vy:40+Math.random()*30,size:2+Math.random()*4,life:1,maxLife:1,type:'snow'});
+    else if(weatherType==='rain') weatherParticles.push({x:cam.x+Math.random()*(canvas.width/scopeZoom),y:cam.y-10,vx:-30,vy:500+Math.random()*200,size:1,life:0.3,maxLife:0.3,type:'rain'});
+  }
+  weatherParticles=weatherParticles.filter(p=>p.life>0).slice(-600);
+}
+
+function updateWeather(dt){
+  if(weatherType==='none')return;
+  weatherParticles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt/p.maxLife;});
+  weatherParticles=weatherParticles.filter(p=>p.life>0&&p.y<cam.y+canvas.height/scopeZoom+20);
+  spawnWeatherParticles();
+}
+
+function renderWeather(){
+  if(weatherType==='none'||weatherParticles.length===0)return;
+  weatherParticles.forEach(p=>{
+    ctx.globalAlpha=p.life*0.7;
+    if(p.type==='snow'){
+      ctx.fillStyle='#e8f4f8';ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();
+    }else if(p.type==='rain'){
+      ctx.strokeStyle='#aed6f1';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x-5,p.y+10);ctx.stroke();
+    }
+  });
+  ctx.globalAlpha=1;
+  // Fog overlay
+  if(weatherType==='snow'){
+    ctx.fillStyle=`rgba(200,220,240,${0.06+Math.sin(Date.now()/3000)*0.02})`;
+    ctx.fillRect(cam.x,cam.y,canvas.width/scopeZoom,canvas.height/scopeZoom);
+  }
+}
+
+// ---- LOOT CRATE LOGIC ----
+function tryOpenCrate(){
+  for(const crate of lootCrates){
+    if(crate.opened)continue;
+    const d=Math.hypot(crate.x-player.x,crate.y-player.y);
+    if(d<50){
+      crate.hp--;
+      spawnParticle(crate.x,crate.y,'#f1c40f',6,100,0.4,4);
+      playSound('hit');
+      if(crate.hp<=0){
+        crate.opened=true;
+        // Spawn 2-3 random items
+        const count=2+Math.floor(Math.random()*2);
+        for(let i=0;i<count;i++){
+          const wKey=WEAPON_POOL[Math.floor(Math.random()*WEAPON_POOL.length)];
+          const def=WEAPONS[wKey];
+          const item={x:crate.x+(Math.random()-0.5)*60,y:crate.y+(Math.random()-0.5)*60,key:wKey,...def};
+          if(!def.isHeal)item.currentAmmo=def.ammo;
+          groundItems.push(item);
+        }
+        spawnExplosion(crate.x,crate.y);
+        addFloatingText(crate.x,crate.y-30,'📦 CRATE OPENED!','#f1c40f');
+        playSound('pickup');
+      } else {
+        addFloatingText(crate.x,crate.y-20,`${crate.hp} hits left`,'#f39c12');
+      }
+      return;
+    }
+  }
+}
+
+// ---- DESTRUCTIBLE BARRICADES ----
+function damageBarricade(bx,by){
+  for(const b of barriacades){
+    if(Math.hypot(bx-b.x-b.w/2,by-b.y-b.h/2)<Math.max(b.w,b.h)/2+8){
+      if(b.hp===undefined)b.hp=3;
+      b.hp--;
+      spawnParticle(bx,by,'#8B6914',4,80,0.3,3);
+      if(b.hp<=0){
+        b.destroyed=true;
+        spawnParticle(b.x+b.w/2,b.y+b.h/2,'#8B6914',10,120,0.5,5);
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
 function isInsideBuilding(x,y,bw=0,bh=0){for(const b of buildings){if(x+bw>b.x&&x-bw<b.x+b.w&&y+bh>b.y&&y-bh<b.y+b.h)return true;}return false;}
-function isSolidAt(x,y,r=0){for(const b of buildings){if(x+r>b.x&&x-r<b.x+b.w&&y+r>b.y&&y-r<b.y+b.h)return true;}for(const b of barriacades){if(x+r>b.x&&x-r<b.x+b.w&&y+r>b.y&&y-r<b.y+b.h)return true;}return false;}
+function isSolidAt(x,y,r=0){for(const b of buildings){if(x+r>b.x&&x-r<b.x+b.w&&y+r>b.y&&y-r<b.y+b.h)return true;}for(const b of barriacades){if(b.destroyed)continue;if(x+r>b.x&&x-r<b.x+b.w&&y+r>b.y&&y-r<b.y+b.h)return true;}for(const c of lootCrates){if(!c.opened&&Math.hypot(x-c.x,y-c.y)<c.r+r)return true;}return false;}
 function resolveCollision(entity,newX,newY){const r=(entity.radius||16)+2;if(!isSolidAt(newX,newY,r))return{x:newX,y:newY};if(!isSolidAt(newX,entity.y,r))return{x:newX,y:entity.y};if(!isSolidAt(entity.x,newY,r))return{x:entity.x,y:newY};return{x:entity.x,y:entity.y};}
 
 // Loot
@@ -1296,7 +1446,7 @@ document.addEventListener('keydown',e=>{
   keys[e.code]=true;
   if(e.code==='Digit1')player.activeSlot=0;if(e.code==='Digit2')player.activeSlot=1;
   if(e.code==='Digit3')player.activeSlot=2;if(e.code==='Digit4')player.activeSlot=3;if(e.code==='Digit5')player.activeSlot=4;
-  if(e.code===S.keys.pickup)tryPickup();
+  if(e.code===S.keys.pickup){tryPickup();tryOpenCrate();}
   if(e.code===S.keys.drop)dropItem();
   if(e.code===S.keys.heal)useHeal();
   if(e.code===S.keys.reload)reloadWeapon(player);
@@ -1460,8 +1610,10 @@ function startOnlineMatch(playersMap, seed) {
   document.getElementById('serverLabel').textContent = currentServer ? currentServer.region : 'SERVER';
 
   // Use server-provided map seed so all clients see same map
-  currentMapType = FOREST_SERVERS.has(currentServer?.id) ? 'forest' : 'city';
-  if(currentMapType==='forest') generateForest(seed); else generateCity(seed);
+  currentMapType = FOREST_SERVERS.has(currentServer?.id) ? 'forest' : SNOW_SERVERS.has(currentServer?.id) ? 'snow' : 'city';
+  if(currentMapType==='forest') generateForest(seed);
+  else if(currentMapType==='snow') generateSnow(seed);
+  else generateCity(seed);
   spawnGroundItems(seed);
 
   // Override server spawn with a safe road position (server coords may be inside buildings)
@@ -1478,6 +1630,11 @@ function startOnlineMatch(playersMap, seed) {
   syncRemotePlayers(playersMap);
 
   bullets=[];particles=[];floatingTexts=[];grenades=[];dayTime=0;scopeZoom=1;scopeTarget=1;
+  lootCrates=lootCrates.filter(c=>!c.opened);
+  barriacades=barriacades.filter(b=>!b.destroyed);
+  weatherParticles=[];
+  if(currentMapType==='snow') weatherType='snow';
+  else weatherType='none';
   gameOver=false;gameRunning=true;
   updateCamera();
   startPosSending();
@@ -1526,6 +1683,7 @@ function startSoloGame() {
   document.getElementById('playerNameHud').textContent='🟢 '+playerUsername;
   initPlayerInventory();
   remotePlayers={};bullets=[];particles=[];floatingTexts=[];grenades=[];dayTime=0;scopeZoom=1;scopeTarget=1;
+  lootCrates=[];weatherParticles=[];weatherType='none';
   serverStorm={centerX:MAP_W/2,centerY:MAP_H/2,radius:MAP_W*0.7,targetRadius:MAP_W*0.45,phase:1,phaseTimer:0,phaseDuration:30,damagePerSec:8};
   gameOver=false;gameRunning=true;
   updateCamera();
@@ -1597,6 +1755,8 @@ function update(dt){
   // Grenade & melee timers
   updateGrenades(dt);
   if(meleeActive){meleeTimer-=dt;if(meleeTimer<=0)meleeActive=false;}
+  // Weather
+  updateWeather(dt);
   // Lerp remote players smoothly
   Object.values(remotePlayers).forEach(rp=>{
     if(!rp.alive) return;
@@ -1607,7 +1767,14 @@ function update(dt){
   bullets.forEach(b=>{
     if(!b.alive)return;b.x+=b.vx*dt;b.y+=b.vy*dt;b.distTraveled+=Math.hypot(b.vx,b.vy)*dt;
     if(b.distTraveled>b.range||b.x<0||b.x>MAP_W||b.y<0||b.y>MAP_H){b.alive=false;return;}
-    if(isSolidAt(b.x,b.y)){b.alive=false;spawnParticle(b.x,b.y,'#aaa',4,80,0.3,3);return;}
+    if(isSolidAt(b.x,b.y)){
+      b.alive=false;
+      spawnParticle(b.x,b.y,'#aaa',4,80,0.3,3);
+      damageBarricade(b.x,b.y);
+      // Damage loot crates
+      for(const c of lootCrates){if(!c.opened&&Math.hypot(b.x-c.x,b.y-c.y)<c.r+8){c.hp--;spawnParticle(c.x,c.y,'#f1c40f',3,80,0.3,3);if(c.hp<=0){c.opened=true;const count=2+Math.floor(Math.random()*2);for(let i=0;i<count;i++){const wKey=WEAPON_POOL[Math.floor(Math.random()*WEAPON_POOL.length)];const def=WEAPONS[wKey];const item={x:c.x+(Math.random()-0.5)*60,y:c.y+(Math.random()-0.5)*60,key:wKey,...def};if(!def.isHeal)item.currentAmmo=def.ammo;groundItems.push(item);}spawnExplosion(c.x,c.y);addFloatingText(c.x,c.y-30,'📦 CRATE OPENED!','#f1c40f');playSound('pickup');}break;}}
+      return;
+    }
     // For OUR bullets hitting remote players — report to server
     if(b.owner===player){
       Object.entries(remotePlayers).forEach(([id,rp])=>{
@@ -1694,11 +1861,47 @@ function render(){
     });
     // Fallen logs
     barriacades.forEach(ba=>{
+      if(ba.destroyed)return;
+      const alpha=ba.hp!==undefined?ba.hp/(ba.maxHp||3):1;
+      ctx.globalAlpha=alpha;
       ctx.fillStyle='#5d3a1a';ctx.fillRect(ba.x,ba.y,ba.w,ba.h);
       ctx.strokeStyle='#3e2723';ctx.lineWidth=2;ctx.strokeRect(ba.x,ba.y,ba.w,ba.h);
       ctx.strokeStyle='#795548';ctx.lineWidth=1;
       if(ba.w>ba.h){const step=ba.h*0.9;for(let lx=ba.x+step;lx<ba.x+ba.w-step/2;lx+=step){ctx.beginPath();ctx.ellipse(lx,ba.y+ba.h/2,ba.h*0.25,ba.h/2-1,0,0,Math.PI*2);ctx.stroke();}}
       else{const step=ba.w*0.9;for(let ly=ba.y+step;ly<ba.y+ba.h-step/2;ly+=step){ctx.beginPath();ctx.ellipse(ba.x+ba.w/2,ly,ba.w/2-1,ba.w*0.25,0,0,Math.PI*2);ctx.stroke();}}
+      ctx.globalAlpha=1;
+    });
+  } else if(currentMapType==='snow'){
+    // Snow ground
+    ctx.fillStyle='#d6eaf8';ctx.fillRect(0,0,MAP_W,MAP_H);
+    ctx.fillStyle='#e8f4f8';
+    for(let i=0;i<200;i++){ctx.fillRect((i*173)%MAP_W,(i*109)%MAP_H,40+i%30,25+i%20);}
+    // Icy roads
+    ctx.fillStyle='#aed6f1';roads.forEach(r=>{ctx.fillRect(r.x,r.y,r.w,r.h);});
+    ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.setLineDash([40,30]);ctx.lineWidth=2;
+    roads.forEach(r=>{if(r.horiz){ctx.beginPath();ctx.moveTo(r.x,r.y+r.h/2);ctx.lineTo(r.x+r.w,r.y+r.h/2);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(r.x+r.w/2,r.y);ctx.lineTo(r.x+r.w/2,r.y+r.h);ctx.stroke();}});
+    ctx.setLineDash([]);
+    // Frozen buildings with snow caps
+    buildings.forEach(b=>{
+      ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(b.x+6,b.y+6,b.w,b.h);
+      ctx.fillStyle=b.color;ctx.fillRect(b.x,b.y,b.w,b.h);
+      ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;
+      const cols2=Math.max(1,Math.floor(b.w/30)),rows2=b.floors||1;
+      const winW=Math.min(20,(b.w/cols2)-8),winH=Math.min(18,(b.h/rows2)-10);
+      for(let fr=0;fr<rows2;fr++)for(let fc=0;fc<cols2;fc++){const wx=b.x+8+fc*(b.w/cols2),wy=b.y+6+fr*(b.h/rows2);ctx.fillStyle=b.windowColor;ctx.fillRect(wx,wy,winW,winH);}
+      // Snow cap on roof
+      ctx.fillStyle='#e8f4f8';ctx.fillRect(b.x,b.y,b.w,10);
+      ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fillRect(b.x,b.y,b.w,5);
+    });
+    // Ice barricades
+    barriacades.forEach(ba=>{
+      if(ba.destroyed)return;
+      const alpha=ba.hp!==undefined?ba.hp/(ba.maxHp||3):1;
+      ctx.globalAlpha=0.4+alpha*0.6;
+      ctx.fillStyle='#aed6f1';ctx.fillRect(ba.x,ba.y,ba.w,ba.h);
+      ctx.strokeStyle='#85c1e9';ctx.lineWidth=2;ctx.strokeRect(ba.x,ba.y,ba.w,ba.h);
+      if(ba.hp!==undefined&&ba.hp<(ba.maxHp||3)){ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ba.x,ba.y);ctx.lineTo(ba.x+ba.w,ba.y+ba.h);ctx.stroke();}
+      ctx.globalAlpha=1;
     });
   } else {
     ctx.fillStyle='#1a1a1a';ctx.fillRect(0,0,MAP_W,MAP_H);
@@ -1707,8 +1910,26 @@ function render(){
     roads.forEach(r=>{if(r.horiz){ctx.beginPath();ctx.moveTo(r.x,r.y+r.h/2);ctx.lineTo(r.x+r.w,r.y+r.h/2);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(r.x+r.w/2,r.y);ctx.lineTo(r.x+r.w/2,r.y+r.h);ctx.stroke();}});
     ctx.setLineDash([]);
     buildings.forEach(b=>{ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(b.x+8,b.y+8,b.w,b.h);ctx.fillStyle=b.color;ctx.fillRect(b.x,b.y,b.w,b.h);ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=1;const flH=b.h/b.floors;for(let f=1;f<b.floors;f++){ctx.beginPath();ctx.moveTo(b.x,b.y+f*flH);ctx.lineTo(b.x+b.w,b.y+f*flH);ctx.stroke();}const cols2=Math.max(1,Math.floor(b.w/30));const rows2=b.floors;const winW=Math.min(20,(b.w/cols2)-8);const winH=Math.min(18,(b.h/rows2)-10);for(let fr=0;fr<rows2;fr++)for(let fc=0;fc<cols2;fc++){const wx=b.x+8+fc*(b.w/cols2),wy=b.y+6+fr*(b.h/rows2);ctx.fillStyle=Math.random()<0.03?'#333':b.windowColor;ctx.fillRect(wx,wy,winW,winH);}ctx.fillStyle=b.roofColor;ctx.fillRect(b.x,b.y,b.w,8);});
-    barriacades.forEach(ba=>{ctx.fillStyle='#5d3a1a';ctx.fillRect(ba.x,ba.y,ba.w,ba.h);ctx.strokeStyle='#8B6914';ctx.lineWidth=2;ctx.strokeRect(ba.x,ba.y,ba.w,ba.h);});
+    barriacades.forEach(ba=>{if(ba.destroyed)return;const alpha=ba.hp!==undefined?ba.hp/(ba.maxHp||3):1;ctx.globalAlpha=alpha;ctx.fillStyle='#5d3a1a';ctx.fillRect(ba.x,ba.y,ba.w,ba.h);ctx.strokeStyle='#8B6914';ctx.lineWidth=2;ctx.strokeRect(ba.x,ba.y,ba.w,ba.h);ctx.globalAlpha=1;});
   }
+  // Loot crates (all map types)
+  lootCrates.forEach(c=>{
+    if(c.opened)return;
+    const pulse=Math.sin(Date.now()/300)*0.3+0.7;
+    ctx.save();ctx.globalAlpha=pulse;
+    ctx.fillStyle='rgba(241,196,15,0.2)';ctx.beginPath();ctx.arc(c.x,c.y,c.r+6,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.fillStyle='#8B6914';ctx.fillRect(c.x-c.r,c.y-c.r,c.r*2,c.r*2);
+    ctx.strokeStyle='#f1c40f';ctx.lineWidth=2;ctx.strokeRect(c.x-c.r,c.y-c.r,c.r*2,c.r*2);
+    ctx.strokeStyle='#f1c40f';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(c.x-c.r,c.y);ctx.lineTo(c.x+c.r,c.y);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(c.x,c.y-c.r);ctx.lineTo(c.x,c.y+c.r);ctx.stroke();
+    ctx.font='bold 14px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('📦',c.x,c.y);
+    // HP bar
+    ctx.fillStyle='#111';ctx.fillRect(c.x-c.r,c.y-c.r-8,c.r*2,5);
+    ctx.fillStyle='#f1c40f';ctx.fillRect(c.x-c.r,c.y-c.r-8,c.r*2*(c.hp/c.maxHp),5);
+    ctx.restore();
+  });
   groundItems.forEach(item=>{const glow=Math.sin(Date.now()/400)*0.3+0.7;ctx.save();ctx.globalAlpha=glow;ctx.fillStyle=item.color||'#f1c40f';ctx.beginPath();ctx.arc(item.x,item.y,10,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='14px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(item.icon||'📦',item.x,item.y);ctx.restore();ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(item.x-25,item.y+12,50,14);ctx.fillStyle='#ccc';ctx.font='9px Oswald';ctx.textAlign='center';ctx.fillText(item.name||item.key,item.x,item.y+21);});
   bullets.forEach(b=>{ctx.save();ctx.fillStyle=b.weaponKey==='sniper'?'#74b9ff':b.weaponKey==='rocket'?'#e67e22':'#f1c40f';ctx.beginPath();if(b.weaponKey==='rocket')ctx.arc(b.x,b.y,5,0,Math.PI*2);else ctx.arc(b.x,b.y,3,0,Math.PI*2);ctx.fill();ctx.restore();});
   particles.forEach(p=>{ctx.globalAlpha=p.life/p.maxLife;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size*(p.life/p.maxLife),0,Math.PI*2);ctx.fill();});ctx.globalAlpha=1;
@@ -1756,7 +1977,10 @@ function render(){
   if(S.stormglow){ctx.strokeStyle='rgba(180,0,255,0.8)';ctx.lineWidth=3+Math.sin(Date.now()/300)*2;ctx.setLineDash([20,10]);
   ctx.beginPath();ctx.arc(s.centerX,s.centerY,s.radius,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
   floatingTexts.forEach(t=>{ctx.globalAlpha=t.life>0.3?1:t.life/0.3;ctx.fillStyle=t.color;ctx.font='bold 16px Oswald';ctx.textAlign='center';ctx.fillText(t.text,t.x,t.y);});
-  ctx.globalAlpha=1;ctx.restore();
+  ctx.globalAlpha=1;
+  // Weather (drawn in world space)
+  renderWeather();
+  ctx.restore();
   // Day/night overlay — gradually darkens the screen
   if(dayTime>0){
     ctx.fillStyle=`rgba(0,0,20,${dayTime*0.55})`;
@@ -1789,15 +2013,17 @@ function renderMinimap(){
   mc.clearRect(0,0,mw,mh);
   if(currentMapType==='forest'){
     mc.fillStyle='#1c3a1c';mc.fillRect(0,0,mw,mh);
-    // paths
     mc.strokeStyle='#6d4c41';mc.lineWidth=3;mc.lineCap='round';
     forestPaths.forEach(p=>{mc.beginPath();mc.moveTo(p.x1*scaleX,p.y1*scaleY);mc.lineTo(p.x2*scaleX,p.y2*scaleY);mc.stroke();});
-    // clearings
     mc.fillStyle='#2d5a1b';
     forestClearings.forEach(c=>{mc.beginPath();mc.arc(c.x*scaleX,c.y*scaleY,c.r*scaleX,0,Math.PI*2);mc.fill();});
-    // trees
     mc.fillStyle='#27ae60';
     trees.forEach(t=>{mc.beginPath();mc.arc(t.x*scaleX,t.y*scaleY,t.canopyR*scaleX,0,Math.PI*2);mc.fill();});
+  } else if(currentMapType==='snow'){
+    mc.fillStyle='#d6eaf8';mc.fillRect(0,0,mw,mh);
+    mc.fillStyle='#aed6f1';roads.forEach(r=>{mc.fillRect(r.x*scaleX,r.y*scaleY,r.w*scaleX,r.h*scaleY);});
+    mc.fillStyle='#2e4057';buildings.forEach(b=>{mc.fillRect(b.x*scaleX,b.y*scaleY,b.w*scaleX,b.h*scaleY);});
+    mc.fillStyle='rgba(241,196,15,0.8)';lootCrates.forEach(c=>{if(!c.opened){mc.beginPath();mc.arc(c.x*scaleX,c.y*scaleY,3,0,Math.PI*2);mc.fill();}});
   } else {
     mc.fillStyle='rgba(0,5,10,0.9)';mc.fillRect(0,0,mw,mh);
     mc.fillStyle='#253545';buildings.forEach(b=>{mc.fillRect(b.x*scaleX,b.y*scaleY,b.w*scaleX,b.h*scaleY);});
