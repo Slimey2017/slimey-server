@@ -397,6 +397,19 @@
     <div id="crosshair"></div>
     <div id="dmgFlash"></div>
     <div id="healFlash"></div>
+    <!-- SPECTATE BAR -->
+    <div id="spectateBar" style="display:none;position:absolute;top:0;left:0;width:100%;background:rgba(0,0,0,0.85);padding:10px;text-align:center;pointer-events:all;border-bottom:2px solid var(--neon);">
+      <span style="font-family:'Bangers',cursive;font-size:20px;color:var(--neon);letter-spacing:3px;">👁️ SPECTATING: </span>
+      <span id="spectateTarget" style="font-family:'Bangers',cursive;font-size:20px;color:var(--gold);letter-spacing:2px;">—</span>
+      <span style="font-family:'Share Tech Mono',monospace;font-size:12px;color:#888;margin-left:20px;">← → to switch</span>
+      <button onclick="stopSpectating()" style="margin-left:20px;background:rgba(231,76,60,0.2);border:1px solid #e74c3c;color:#e74c3c;padding:4px 12px;border-radius:3px;cursor:pointer;font-family:'Oswald',sans-serif;font-size:12px;">LEAVE</button>
+    </div>
+    <!-- DAILY CHALLENGE HUD -->
+    <div id="challengeHud" style="position:absolute;bottom:82px;left:270px;background:rgba(0,5,15,0.85);border:1px solid rgba(241,196,15,0.3);border-radius:6px;padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;display:none;">
+      <div style="color:var(--gold);font-weight:700;margin-bottom:3px;letter-spacing:1px;">📅 DAILY CHALLENGE</div>
+      <div id="challengeText" style="color:#aaa;"></div>
+      <div id="challengeProgress" style="color:var(--neon);margin-top:2px;"></div>
+    </div>
   </div>
 </div>
 
@@ -448,6 +461,22 @@
         <div class="skin-section">
           <div class="skin-section-title">✨ Trail</div>
           <div class="skin-grid" id="skin-trails"></div>
+        </div>
+        <div class="skin-section">
+          <div class="skin-section-title">💀 Death Animation</div>
+          <div class="skin-grid" id="skin-deaths"></div>
+        </div>
+        <div class="skin-section">
+          <div class="skin-section-title">⚡ Kill Effect</div>
+          <div class="skin-grid" id="skin-killeffects"></div>
+        </div>
+        <div class="skin-section">
+          <div class="skin-section-title">🔫 Weapon Color</div>
+          <div class="skin-grid" id="skin-weaponcolors"></div>
+        </div>
+        <div class="skin-section">
+          <div class="skin-section-title">🏷️ Title</div>
+          <div class="skin-grid" id="skin-titles"></div>
         </div>
       </div>
     </div>
@@ -673,7 +702,7 @@ function updateFPS(ts){
 // settings loaded after game script starts
 
 // =====================================================
-const SERVER_URL = 'https://slimey-server.onrender.com/'; // <-- CHANGE THIS when deployed
+const SERVER_URL = 'http://localhost:3000'; // <-- CHANGE THIS when deployed
 const FOREST_SERVERS = new Set(['official-na-west-1','official-eu-west-2','official-asia-1','custom-slimewars','custom-nostorm']);
 const SNOW_SERVERS = new Set(['official-na-east-2','official-eu-west-1','ranked-na-east-1','custom-scrim','custom-nostorm2']);
 
@@ -913,9 +942,21 @@ socket.on('hitConfirmed', ({ targetId, damage, hp }) => {
 socket.on('playerEliminated', ({ id, name, killedBy, killerScore }) => {
   if (id === mySocketId) return; // handled by youDied
   const rp = remotePlayers[id];
-  if (rp) { rp.alive = false; spawnBlood(rp.x, rp.y); spawnBlood(rp.x, rp.y); }
+  if (rp) {
+    rp.alive = false;
+    spawnBlood(rp.x, rp.y); spawnBlood(rp.x, rp.y);
+    const col = SKIN_COLORS.find(sc=>sc.id===(rp.skin?.colorId||'green'))?.color||'#e74c3c';
+    spawnDeathAnim(rp.x, rp.y, col, rp.skin?.deathAnimId||'splat');
+  }
   const isYouKiller = killedBy === playerUsername;
-  if (isYouKiller) { player.score++; }
+  if (isYouKiller) {
+    player.score++;
+    if(rp) spawnKillEffect(rp.x, rp.y, playerSkin.killEffectId||'none');
+    // Title tracking
+    matchStats.grenadeKill = matchStats.grenadeKill; // handled per-weapon
+    if(!matchStats.firstKillDone){matchStats.firstKillDone=true;checkTitleUnlock('firstblood');}
+    tickChallenge('grenadeKills');
+  }
   addKillFeed(`${isYouKiller ? '💀' : '⚔️'} ${killedBy} eliminated ${name}`, isYouKiller ? 'player-kill' : 'enemy-kill');
   addLiveGameChat('SYSTEM', `${killedBy} ▶ ${name}`, '#f1c40f');
   const alive = Object.values(remotePlayers).filter(p => p.alive).length + (player.alive ? 1 : 0);
@@ -926,6 +967,8 @@ socket.on('youDied', ({ reason, killerName }) => {
   player.alive = false;
   lastKillerName = killerName || '';
   lastKillerReason = reason || '';
+  const col = SKIN_COLORS.find(sc=>sc.id===(playerSkin.colorId||'green'))?.color||'#00b894';
+  spawnDeathAnim(player.x, player.y, col, playerSkin.deathAnimId||'splat');
   spawnBlood(player.x, player.y); spawnBlood(player.x, player.y);
   const msg = reason === 'storm' ? '⚡ Storm eliminated you!' : `💀 ${killerName} eliminated you!`;
   addKillFeed(msg, 'system-msg');
@@ -972,7 +1015,9 @@ function confirmUsername() {
   const val = document.getElementById('usernameInput').value.trim().toUpperCase();
   playerUsername = val || 'SLIMEY';
   document.getElementById('usernameOverlay').classList.remove('active');
-  document.getElementById('playerNameHud').textContent = '🟢 ' + playerUsername;
+  const titleObj=ALL_TITLES.find(t=>t.id===(playerSkin.titleId||'none'));
+  const titleStr=titleObj&&titleObj.id!=='none'?' · '+titleObj.icon+titleObj.name:'';
+  document.getElementById('playerNameHud').textContent = '🟢 ' + playerUsername + titleStr;
   showScreen('titleScreen');
 }
 
@@ -1138,7 +1183,7 @@ function playSound(type){try{const ac=getAudio();const g=ac.createGain();g.conne
 
 // ---- CONSTANTS ----
 const MAP_W=3200,MAP_H=3200;
-const WEAPONS={pistol:{name:'Pistol',icon:'🔫',color:'#aaa',damage:25,fireRate:400,ammo:12,maxAmmo:12,speed:900,spread:0.05,reloadTime:1200,range:600,auto:false,soundType:'shoot'},ar:{name:'Assault Rifle',icon:'⚙️',color:'#5d8a4e',damage:20,fireRate:150,ammo:30,maxAmmo:30,speed:1000,spread:0.08,reloadTime:2000,range:700,auto:true,soundType:'shoot'},shotgun:{name:'Shotgun',icon:'💥',color:'#c0392b',damage:18,fireRate:800,ammo:6,maxAmmo:6,speed:700,spread:0.25,pellets:6,reloadTime:2500,range:350,auto:false,soundType:'shotgun'},sniper:{name:'Sniper',icon:'🎯',color:'#2c3e50',damage:120,fireRate:1500,ammo:5,maxAmmo:5,speed:1400,spread:0.01,reloadTime:3000,range:1200,auto:false,soundType:'snipe'},smg:{name:'SMG',icon:'🔩',color:'#7f8c8d',damage:14,fireRate:80,ammo:35,maxAmmo:35,speed:900,spread:0.15,reloadTime:1500,range:450,auto:true,soundType:'shoot'},rocket:{name:'Rocket',icon:'🚀',color:'#e67e22',damage:80,fireRate:2000,ammo:3,maxAmmo:3,speed:400,spread:0.02,reloadTime:3500,range:900,auto:false,soundType:'shoot',splash:60},minigun:{name:'Minigun',icon:'🌀',color:'#e74c3c',damage:12,fireRate:60,ammo:100,maxAmmo:100,speed:900,spread:0.2,reloadTime:4000,range:500,auto:true,soundType:'shoot'},grenade:{name:'Grenade',icon:'💣',color:'#2ecc71',damage:70,fireRate:1200,ammo:3,maxAmmo:3,speed:500,spread:0.05,reloadTime:2000,range:600,auto:false,soundType:'shoot',isGrenade:true,splash:90},knife:{name:'Knife',icon:'🔪',color:'#ecf0f1',damage:50,fireRate:600,ammo:1,maxAmmo:1,speed:0,spread:0,reloadTime:0,range:55,auto:false,soundType:'hit',isMelee:true},bat:{name:'Bat',icon:'🏏',color:'#8B6914',damage:35,fireRate:500,ammo:1,maxAmmo:1,speed:0,spread:0,reloadTime:0,range:65,auto:false,soundType:'hit',isMelee:true},healpack:{name:'Med Kit',icon:'💊',color:'#2ecc71',isHeal:true,healAmt:50,hpType:'hp'},shield:{name:'Shield Pot',icon:'🔵',color:'#3498db',isHeal:true,healAmt:50,hpType:'shield'},bandage:{name:'Bandage',icon:'🩹',color:'#27ae60',isHeal:true,healAmt:15,hpType:'hp'}};
+const WEAPONS={pistol:{name:'Pistol',icon:'🔫',color:'#aaa',damage:25,fireRate:400,ammo:12,maxAmmo:12,speed:900,spread:0.05,reloadTime:1200,range:600,auto:false,soundType:'shoot'},ar:{name:'Assault Rifle',icon:'⚙️',color:'#5d8a4e',damage:20,fireRate:150,ammo:30,maxAmmo:30,speed:1000,spread:0.08,reloadTime:2000,range:700,auto:true,soundType:'shoot'},shotgun:{name:'Shotgun',icon:'💥',color:'#c0392b',damage:18,fireRate:800,ammo:6,maxAmmo:6,speed:700,spread:0.25,pellets:6,reloadTime:2500,range:350,auto:false,soundType:'shotgun'},sniper:{name:'Sniper',icon:'🎯',color:'#2c3e50',damage:120,fireRate:1500,ammo:5,maxAmmo:5,speed:1400,spread:0.01,reloadTime:3000,range:1200,auto:false,soundType:'snipe'},smg:{name:'SMG',icon:'🔩',color:'#7f8c8d',damage:14,fireRate:80,ammo:35,maxAmmo:35,speed:900,spread:0.15,reloadTime:1500,range:450,auto:true,soundType:'shoot'},rocket:{name:'Rocket',icon:'🚀',color:'#e67e22',damage:80,fireRate:2000,ammo:3,maxAmmo:3,speed:400,spread:0.02,reloadTime:3500,range:900,auto:false,soundType:'shoot',splash:60},minigun:{name:'Minigun',icon:'🌀',color:'#e74c3c',damage:12,fireRate:60,ammo:100,maxAmmo:100,speed:900,spread:0.2,reloadTime:4000,range:500,auto:true,soundType:'shoot'},grenade:{name:'Grenade',icon:'💣',color:'#2ecc71',damage:70,fireRate:1200,ammo:3,maxAmmo:3,speed:500,spread:0.05,reloadTime:2000,range:600,auto:false,soundType:'shoot',isGrenade:true,splash:90},knife:{name:'Knife',icon:'🔪',color:'#ecf0f1',damage:50,fireRate:600,ammo:1,maxAmmo:1,speed:0,spread:0,reloadTime:0,range:55,auto:false,soundType:'hit',isMelee:true},bat:{name:'Bat',icon:'🏏',color:'#8B6914',damage:35,fireRate:500,ammo:1,maxAmmo:1,speed:0,spread:0,reloadTime:0,range:65,auto:false,soundType:'hit',isMelee:true},flamethrower:{name:'Flamethrower',icon:'🔥',color:'#e74c3c',damage:8,fireRate:80,ammo:60,maxAmmo:60,speed:280,spread:0.4,reloadTime:3000,range:180,auto:true,soundType:'shoot',isFlame:true},boomerang:{name:'Boomerang',icon:'🪃',color:'#e67e22',damage:30,fireRate:1000,ammo:2,maxAmmo:2,speed:420,spread:0.02,reloadTime:2000,range:500,auto:false,soundType:'shoot',isBoomerang:true},deployshield:{name:'Deploy Shield',icon:'🛡️',color:'#3498db',damage:0,fireRate:1500,ammo:2,maxAmmo:2,speed:0,spread:0,reloadTime:2500,range:0,auto:false,soundType:'reload',isDeployShield:true},poisondart:{name:'Poison Dart',icon:'☠️',color:'#27ae60',damage:10,fireRate:600,ammo:8,maxAmmo:8,speed:550,spread:0.03,reloadTime:1800,range:700,auto:false,soundType:'shoot',isPoison:true},healpack:{name:'Med Kit',icon:'💊',color:'#2ecc71',isHeal:true,healAmt:50,hpType:'hp'},shield:{name:'Shield Pot',icon:'🔵',color:'#3498db',isHeal:true,healAmt:50,hpType:'shield'},bandage:{name:'Bandage',icon:'🩹',color:'#27ae60',isHeal:true,healAmt:15,hpType:'hp'}};
 
 let particles=[];
 function spawnParticle(x,y,color,count=8,speed=120,life=0.5,size=4){for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2;const s=(Math.random()*0.5+0.5)*speed;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,color,life,maxLife:life,size:Math.random()*size+1});}}
@@ -1387,7 +1432,7 @@ function resolveCollision(entity,newX,newY){const r=(entity.radius||16)+2;if(!is
 
 // Loot
 let groundItems=[];
-const WEAPON_POOL=['pistol','ar','shotgun','sniper','smg','rocket','minigun','grenade','grenade','knife','bat','healpack','shield','bandage','bandage','healpack','shield'];
+const WEAPON_POOL=['pistol','ar','shotgun','sniper','smg','rocket','minigun','grenade','grenade','knife','bat','flamethrower','boomerang','deployshield','poisondart','healpack','shield','bandage','bandage','healpack','shield'];
 function spawnGroundItems(seed=42){groundItems=[];const rng=seededRand(seed+1);lootSpawns.forEach(s=>{if(rng()<0.6){const wKey=WEAPON_POOL[Math.floor(rng()*WEAPON_POOL.length)];const def=WEAPONS[wKey];const item={x:s.x,y:s.y,key:wKey,...def};if(!def.isHeal)item.currentAmmo=def.ammo;groundItems.push(item);}});}
 
 // Bullets
@@ -1573,18 +1618,335 @@ function playDirectionalSound(type, srcX, srcY){
   }catch(e){}
 }
 
+// ---- SPECTATE MODE ----
+let spectating=false, spectateTargets=[], spectateIdx=0, spectateCam={x:0,y:0};
+
+function enterSpectate(){
+  spectating=true;
+  document.getElementById('spectateBar').style.display='block';
+  spectateTargets=Object.values(remotePlayers).filter(p=>p.alive);
+  spectateIdx=0;
+  updateSpectateTarget();
+}
+
+function stopSpectating(){
+  spectating=false;
+  document.getElementById('spectateBar').style.display='none';
+}
+
+function updateSpectateTarget(){
+  spectateTargets=Object.values(remotePlayers).filter(p=>p.alive);
+  if(!spectateTargets.length){stopSpectating();endGame(false,null,null);return;}
+  spectateIdx=Math.max(0,Math.min(spectateIdx,spectateTargets.length-1));
+  const t=spectateTargets[spectateIdx];
+  document.getElementById('spectateTarget').textContent=t?t.name:'—';
+}
+
+document.addEventListener('keydown',e=>{
+  if(!spectating)return;
+  if(e.code==='ArrowLeft'){spectateIdx=(spectateIdx-1+spectateTargets.length)%spectateTargets.length;updateSpectateTarget();}
+  if(e.code==='ArrowRight'){spectateIdx=(spectateIdx+1)%spectateTargets.length;updateSpectateTarget();}
+});
+
+// ---- DEATH ANIMATIONS ----
+let deathAnims=[]; // {x,y,color,type,timer}
+function spawnDeathAnim(x,y,skinColor,animType){
+  deathAnims.push({x,y,color:skinColor,type:animType||'splat',timer:0.8,maxTimer:0.8});
+}
+function updateDeathAnims(dt){deathAnims.forEach(a=>a.timer-=dt);deathAnims=deathAnims.filter(a=>a.timer>0);}
+function renderDeathAnims(){
+  deathAnims.forEach(a=>{
+    const t=1-a.timer/a.maxTimer;
+    ctx.save();
+    if(a.type==='splat'){
+      ctx.globalAlpha=a.timer/a.maxTimer;
+      ctx.fillStyle=a.color;
+      for(let i=0;i<8;i++){const angle=i/8*Math.PI*2;const r=20+t*30;ctx.beginPath();ctx.ellipse(a.x+Math.cos(angle)*r,a.y+Math.sin(angle)*r,8*(1-t)+2,4,angle,0,Math.PI*2);ctx.fill();}
+    }else if(a.type==='explode'){
+      spawnParticle(a.x,a.y,a.color,2,200,0.1,10);
+    }else if(a.type==='melt'){
+      ctx.globalAlpha=a.timer/a.maxTimer;
+      const sc=1-t*0.8;
+      ctx.translate(a.x,a.y);ctx.scale(1+t*0.5,sc);
+      const g=ctx.createRadialGradient(0,0,2,0,0,14);g.addColorStop(0,'#fff');g.addColorStop(1,a.color);
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,14,0,Math.PI*2);ctx.fill();
+    }else if(a.type==='spin'){
+      ctx.globalAlpha=a.timer/a.maxTimer;
+      ctx.translate(a.x,a.y);ctx.rotate(t*Math.PI*6);ctx.scale(1-t*0.9,1-t*0.9);
+      ctx.fillStyle=a.color;ctx.beginPath();ctx.arc(0,0,14,0,Math.PI*2);ctx.fill();
+    }
+    ctx.restore();
+  });
+}
+
+// ---- KILL EFFECTS ----
+let killEffects=[]; // {x,y,type,timer}
+function spawnKillEffect(x,y,type){
+  killEffects.push({x,y,type,timer:0.7,maxTimer:0.7});
+}
+function updateKillEffects(dt){killEffects.forEach(e=>e.timer-=dt);killEffects=killEffects.filter(e=>e.timer>0);}
+function renderKillEffects(){
+  killEffects.forEach(e=>{
+    const t=1-e.timer/e.maxTimer;
+    ctx.save();
+    if(e.type==='lightning'){
+      ctx.globalAlpha=e.timer/e.maxTimer;ctx.strokeStyle='#f1c40f';ctx.lineWidth=3;
+      for(let i=0;i<5;i++){ctx.beginPath();const sx=e.x+(Math.random()-0.5)*40,sy=e.y-50-Math.random()*30;ctx.moveTo(e.x,e.y);for(let s=0;s<4;s++){ctx.lineTo(e.x+(Math.random()-0.5)*30,e.y-s*15);}ctx.stroke();}
+    }else if(e.type==='confetti'){
+      const cols=['#f1c40f','#e74c3c','#2ecc71','#3498db','#9b59b6'];
+      for(let i=0;i<6;i++){ctx.fillStyle=cols[i%cols.length];ctx.globalAlpha=e.timer/e.maxTimer;ctx.fillRect(e.x+(Math.random()-0.5)*60-5,e.y+(Math.random()-0.5)*60-5,8,5);}
+    }else if(e.type==='fire'){
+      ctx.globalAlpha=e.timer/e.maxTimer;
+      for(let i=0;i<8;i++){const a=i/8*Math.PI*2,r=15+t*25;ctx.fillStyle=i%2?'#e74c3c':'#f39c12';ctx.beginPath();ctx.arc(e.x+Math.cos(a)*r,e.y+Math.sin(a)*r,5*(1-t)+2,0,Math.PI*2);ctx.fill();}
+    }
+    ctx.restore();
+  });
+}
+
+// ---- PLAYER TITLES ----
+const ALL_TITLES=[
+  {id:'none',name:'None',icon:'🚫',desc:''},
+  {id:'firstblood',name:'First Blood',icon:'🩸',desc:'First kill of a match'},
+  {id:'stormchaser',name:'Storm Chaser',icon:'⚡',desc:'Survive 10s in the storm'},
+  {id:'untouchable',name:'Untouchable',icon:'🛡️',desc:'Win without taking damage'},
+  {id:'boomer',name:'Boom!',icon:'💥',desc:'Kill someone with a grenade'},
+  {id:'sharpshooter',name:'Sharpshooter',icon:'🎯',desc:'3 sniper kills in one match'},
+  {id:'berserker',name:'Berserker',icon:'⚔️',desc:'3 melee kills in one match'},
+  {id:'survivor',name:'Survivor',icon:'🏃',desc:'Reach top 3 five times'},
+  {id:'slimelord',name:'Slime Lord',icon:'👑',desc:'Win 3 matches total'},
+  {id:'poisoner',name:'Poisoner',icon:'☠️',desc:'Kill someone with poison dart'},
+  {id:'pyro',name:'Pyro',icon:'🔥',desc:'Kill someone with flamethrower'},
+];
+let unlockedTitles=new Set(['none']);
+function loadTitles(){try{const s=localStorage.getItem('slimeyTitles');if(s)unlockedTitles=new Set(JSON.parse(s));}catch(e){}unlockedTitles.add('none');}
+function saveTitle(id){unlockedTitles.add(id);localStorage.setItem('slimeyTitles',JSON.stringify([...unlockedTitles]));}
+function checkTitleUnlock(id){if(!unlockedTitles.has(id)){saveTitle(id);addKillFeed(`🏷️ Title unlocked: ${ALL_TITLES.find(t=>t.id===id)?.name||id}`,'system-msg');}}
+
+// ---- MATCH STATS for title tracking ----
+let matchStats={firstKillDone:false,stormTime:0,inStorm:false,noHit:true,grenadeKill:false,sniperKills:0,meleeKills:0,poisonKill:false,flameKill:false};
+
+// ---- DAILY CHALLENGE ----
+const CHALLENGES=[
+  {id:'melee3',text:'Get 3 melee kills',track:'meleeKills',goal:3,reward:'rainbow'},
+  {id:'crate2',text:'Open 2 loot crates',track:'cratesOpened',goal:2,reward:'stars'},
+  {id:'top5',text:'Survive to top 5',track:'topFive',goal:1,reward:'fire'},
+  {id:'grenade2',text:'Kill 2 players with grenades',track:'grenadeKills',goal:2,reward:'hearts'},
+  {id:'sniper2',text:'Get 2 sniper kills',track:'sniperKills',goal:2,reward:'bubbles'},
+  {id:'heal3',text:'Use 3 heal items',track:'healsUsed',goal:3,reward:'stars'},
+  {id:'poison1',text:'Kill someone with poison dart',track:'poisonKills',goal:1,reward:'rainbow'},
+  {id:'survive10',text:'Survive 10 minutes in a match',track:'survivedMinutes',goal:10,reward:'fire'},
+];
+let todayChallenge=null, challengeProgress=0, challengeDone=false;
+function initDailyChallenge(){
+  const today=new Date().toDateString();
+  const saved=JSON.parse(localStorage.getItem('slimeyChallenge')||'{}');
+  if(saved.date===today){todayChallenge=CHALLENGES.find(c=>c.id===saved.id)||CHALLENGES[0];challengeProgress=saved.progress||0;challengeDone=saved.done||false;}
+  else{const idx=Math.floor(new Date().getDate())%CHALLENGES.length;todayChallenge=CHALLENGES[idx];challengeProgress=0;challengeDone=false;localStorage.setItem('slimeyChallenge',JSON.stringify({date:today,id:todayChallenge.id,progress:0,done:false}));}
+  updateChallengeHUD();
+}
+function updateChallengeHUD(){
+  if(!todayChallenge)return;
+  const hud=document.getElementById('challengeHud');
+  if(gameRunning){hud.style.display='block';}
+  document.getElementById('challengeText').textContent=todayChallenge.text;
+  document.getElementById('challengeProgress').textContent=challengeDone?'✓ COMPLETED!':`${challengeProgress}/${todayChallenge.goal}`;
+}
+function tickChallenge(stat,amount=1){
+  if(!todayChallenge||challengeDone)return;
+  if(todayChallenge.track===stat){
+    challengeProgress=Math.min(todayChallenge.goal,challengeProgress+amount);
+    if(challengeProgress>=todayChallenge.goal){
+      challengeDone=true;
+      addKillFeed(`📅 DAILY CHALLENGE COMPLETE! Trail unlocked: ${todayChallenge.reward}`,'system-msg');
+      // unlock the reward trail temporarily
+      if(!playerSkin.unlockedTrails)playerSkin.unlockedTrails=[];
+      playerSkin.unlockedTrails.push(todayChallenge.reward);
+    }
+    const today=new Date().toDateString();
+    localStorage.setItem('slimeyChallenge',JSON.stringify({date:today,id:todayChallenge.id,progress:challengeProgress,done:challengeDone}));
+    updateChallengeHUD();
+  }
+}
+
+// ---- FIRE PATCHES (flamethrower ground fire) ----
+let firePatches=[]; // {x,y,r,timer}
+function updateFirePatches(dt){
+  firePatches.forEach(f=>{f.timer-=dt;});
+  firePatches=firePatches.filter(f=>f.timer>0);
+  // Damage player in fire patches
+  firePatches.forEach(f=>{
+    if(Math.hypot(player.x-f.x,player.y-f.y)<f.r&&player.alive){
+      player.hp=Math.max(0,player.hp-5*dt);
+      document.getElementById('dmgFlash').style.background='rgba(231,76,60,0.15)';
+    }
+  });
+}
+function renderFirePatches(){
+  firePatches.forEach(f=>{
+    const pulse=Math.sin(Date.now()/150)*0.2+0.6;
+    ctx.globalAlpha=f.timer/2*pulse;
+    ctx.fillStyle='#e74c3c';ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#f39c12';ctx.beginPath();ctx.arc(f.x,f.y,f.r*0.5,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  });
+}
+
+// ---- BOOMERANGS ----
+let boomerangs=[]; // {x,y,angle,speed,dist,maxDist,returning,owner,startX,startY}
+function spawnBoomerang(x,y,angle,owner){
+  boomerangs.push({x,y,startX:x,startY:y,angle,speed:400,dist:0,maxDist:480,returning:false,owner,alive:true,rotation:0});
+}
+function updateBoomerangs(dt){
+  boomerangs.forEach(b=>{
+    if(!b.alive)return;
+    b.rotation+=8*dt;
+    if(!b.returning){
+      b.x+=Math.cos(b.angle)*b.speed*dt;b.y+=Math.sin(b.angle)*b.speed*dt;
+      b.dist+=b.speed*dt;
+      if(b.dist>=b.maxDist)b.returning=true;
+      if(isSolidAt(b.x,b.y)){b.returning=true;}
+    }else{
+      const dx=b.startX-b.x,dy=b.startY-b.y,d=Math.hypot(dx,dy);
+      if(d<20){b.alive=false;return;}
+      b.x+=dx/d*b.speed*dt;b.y+=dy/d*b.speed*dt;
+      // Return hits self start area
+      if(d<25&&b.returning)b.alive=false;
+    }
+    // Hit check on remote players
+    if(b.owner===player){
+      Object.entries(remotePlayers).forEach(([id,rp])=>{
+        if(!rp.alive)return;
+        if(Math.hypot(b.x-rp.x,b.y-rp.y)<rp.radius+10){
+          socket.emit('reportHit',{targetId:id,damage:30,weaponKey:'boomerang'});
+          addFloatingText(rp.x,rp.y-20,'🪃 BOOMERANG!','#e67e22');
+        }
+      });
+    }
+  });
+  boomerangs=boomerangs.filter(b=>b.alive);
+}
+function renderBoomerangs(){
+  boomerangs.forEach(b=>{
+    ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.rotation);
+    ctx.font='18px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('🪃',0,0);
+    ctx.restore();
+  });
+}
+
+// ---- DEPLOYED SHIELDS ----
+let deployedShields=[]; // {x,y,w,h,angle,hp,maxHp,timer,owner}
+function placeDeployShield(){
+  if(!gameRunning||!player.alive)return;
+  // Remove old player shield
+  deployedShields=deployedShields.filter(s=>s.owner!==player||s.timer>0);
+  const angle=player.angle;
+  const px=player.x+Math.cos(angle)*30,py=player.y+Math.sin(angle)*30;
+  deployedShields.push({x:px,y:py,angle,hp:3,maxHp:3,timer:8,owner:player,alive:true});
+  playSound('reload');
+  addFloatingText(player.x,player.y-30,'🛡️ Shield placed!','#3498db');
+}
+function updateDeployedShields(dt){
+  deployedShields.forEach(s=>{s.timer-=dt;if(s.timer<=0)s.alive=false;});
+  deployedShields=deployedShields.filter(s=>s.alive);
+}
+function isBulletBlockedByShield(bx,by){
+  for(const s of deployedShields){
+    const cos=Math.cos(s.angle),sin=Math.sin(s.angle);
+    const lx=(bx-s.x)*cos+(by-s.y)*sin;
+    const ly=-(bx-s.x)*sin+(by-s.y)*cos;
+    if(Math.abs(lx)<40&&Math.abs(ly)<10){
+      s.hp--;if(s.hp<=0)s.alive=false;
+      spawnParticle(bx,by,'#3498db',4,80,0.3,4);
+      return true;
+    }
+  }
+  return false;
+}
+function renderDeployedShields(){
+  deployedShields.forEach(s=>{
+    const pulse=Math.sin(Date.now()/300)*0.2+0.7;
+    ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.angle);
+    ctx.globalAlpha=(s.hp/s.maxHp)*pulse;
+    ctx.strokeStyle='#74b9ff';ctx.lineWidth=6;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(-40,0);ctx.lineTo(40,0);ctx.stroke();
+    ctx.strokeStyle='rgba(116,185,255,0.3)';ctx.lineWidth=12;ctx.stroke();
+    ctx.globalAlpha=1;ctx.restore();
+    // HP dots
+    for(let i=0;i<s.hp;i++){ctx.fillStyle='#3498db';ctx.beginPath();ctx.arc(s.x-6+i*6,s.y-18,3,0,Math.PI*2);ctx.fill();}
+  });
+}
+
+// ---- POISON SYSTEM ----
+let poisonedEntities=new Map(); // id->timer
+function applyPoison(targetId,duration=5){poisonedEntities.set(targetId,duration);}
+function updatePoison(dt){
+  poisonedEntities.forEach((timer,id)=>{
+    const newT=timer-dt;
+    if(newT<=0){poisonedEntities.delete(id);return;}
+    poisonedEntities.set(id,newT);
+    // Tick damage every 0.5s is handled via a separate timer below
+  });
+}
+let poisonTickTimer=0;
+function tickPoisonDamage(dt){
+  poisonTickTimer+=dt;
+  if(poisonTickTimer<0.5)return;
+  poisonTickTimer=0;
+  poisonedEntities.forEach((timer,id)=>{
+    if(id==='self'){player.hp=Math.max(0,player.hp-3);spawnParticle(player.x,player.y,'#27ae60',3,50,0.4,4);}
+    else{socket.emit('reportHit',{targetId:id,damage:3,weaponKey:'poisondart'});}
+  });
+}
+function renderPoisonEffects(){
+  // Green glow on poisoned remote players
+  poisonedEntities.forEach((timer,id)=>{
+    if(id==='self'){spawnParticle(player.x,player.y,'#27ae60',1,30,0.3,3);return;}
+    const rp=remotePlayers[id];if(!rp||!rp.alive)return;
+    ctx.globalAlpha=0.5*Math.sin(Date.now()/200+0.5)+0.3;
+    ctx.fillStyle='rgba(39,174,96,0.3)';ctx.beginPath();ctx.arc(rp.x,rp.y,20,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  });
+}
+
 function tryPickup(){let closest=null,cd=Infinity;for(const item of groundItems){const d=Math.hypot(item.x-player.x,item.y-player.y);if(d<60&&d<cd){closest=item;cd=d;}}if(!closest)return;let slot=player.inventory.findIndex(s=>s===null);if(slot===-1)slot=player.activeSlot;if(player.inventory[slot]){const old=player.inventory[slot];groundItems.push({...old,x:player.x+Math.random()*30-15,y:player.y+Math.random()*30-15});}player.inventory[slot]=closest;groundItems.splice(groundItems.indexOf(closest),1);playSound('pickup');addFloatingText(player.x,player.y-30,`+${closest.name||closest.key}`,'#f1c40f');}
 function dropItem(){const item=player.inventory[player.activeSlot];if(!item)return;groundItems.push({...item,x:player.x+20,y:player.y});player.inventory[player.activeSlot]=null;}
 function useHeal(){for(let i=0;i<5;i++){const it=player.inventory[i];if(!it||!it.isHeal)continue;if(it.hpType==='hp'&&player.hp>=player.maxHp)continue;if(it.hpType==='shield'&&player.shield>=player.maxShield)continue;const amount=it.healAmt;if(it.hpType==='hp')player.hp=Math.min(player.maxHp,player.hp+amount);else player.shield=Math.min(player.maxShield,player.shield+amount);playSound('heal');spawnHealEffect(player.x,player.y);addFloatingText(player.x,player.y-30,`+${amount} ${it.hpType==='hp'?'HP':'Shield'}`,'#2ecc71');document.getElementById('healFlash').style.background='rgba(39,174,96,0.25)';setTimeout(()=>document.getElementById('healFlash').style.background='rgba(39,174,96,0)',200);player.inventory[i]=null;return;}}
 function reloadWeapon(entity){const w=entity.inventory[entity.activeSlot||0];if(!w||w.isHeal||w.isMelee||w.isGrenade||entity.reloading)return;if(w.currentAmmo===w.maxAmmo)return;entity.reloading=true;entity.reloadStart=performance.now();if(entity.isPlayer)playSound('reload');}
 function tryShoot(entity,targetAngle){
   if(!entity.alive)return;const w=entity.inventory[entity.activeSlot||0];if(!w||w.isHeal||entity.reloading)return;
-  // Melee weapons — redirect to swing
   if(w.isMelee){if(entity.isPlayer)swingMelee();return;}
-  // Grenade — redirect to throw
   if(w.isGrenade){if(entity.isPlayer)throwGrenade();return;}
+  if(w.isBoomerang){if(entity.isPlayer){const now=performance.now();if(now-entity.lastFireTime<w.fireRate)return;if(w.currentAmmo<=0){reloadWeapon(entity);return;}entity.lastFireTime=now;w.currentAmmo--;spawnBoomerang(entity.x,entity.y,targetAngle,entity);playSound('shoot');socket.emit('bulletFired',{x:Math.round(entity.x),y:Math.round(entity.y),angle:targetAngle,weaponKey:w.key});if(w.currentAmmo===0&&S.autoreload)reloadWeapon(entity);}return;}
+  if(w.isDeployShield){if(entity.isPlayer)placeDeployShield();return;}
   const now=performance.now();if(now-entity.lastFireTime<w.fireRate)return;if(w.currentAmmo<=0){reloadWeapon(entity);return;}
   entity.lastFireTime=now;w.currentAmmo--;
+  if(w.isFlame){
+    // Flamethrower: cone of flame particles, check hit in cone
+    spawnParticle(entity.x+Math.cos(targetAngle)*20,entity.y+Math.sin(targetAngle)*20,'#e74c3c',3,200,0.3,8);
+    spawnParticle(entity.x+Math.cos(targetAngle)*20,entity.y+Math.sin(targetAngle)*20,'#f39c12',2,180,0.25,6);
+    // Spawn fire patch occasionally
+    if(Math.random()<0.15)firePatches.push({x:entity.x+Math.cos(targetAngle)*80+( Math.random()-0.5)*40,y:entity.y+Math.sin(targetAngle)*80+(Math.random()-0.5)*40,r:25,timer:2});
+    // Hit check: cone 180px
+    if(entity.isPlayer){
+      Object.entries(remotePlayers).forEach(([id,rp])=>{
+        if(!rp.alive)return;
+        const d=Math.hypot(rp.x-entity.x,rp.y-entity.y);
+        const a=Math.abs(Math.atan2(rp.y-entity.y,rp.x-entity.x)-targetAngle);
+        if(d<180&&a<0.5){socket.emit('reportHit',{targetId:id,damage:w.damage,weaponKey:w.key});}
+      });
+    }
+    if(entity.isPlayer){playSound(w.soundType||'shoot');socket.emit('bulletFired',{x:Math.round(entity.x),y:Math.round(entity.y),angle:targetAngle,weaponKey:w.key});}
+    if(w.currentAmmo===0&&S.autoreload)reloadWeapon(entity);
+    return;
+  }
+  if(w.isPoison){
+    // Fires a slow poison bullet
+    bullets.push({x:entity.x,y:entity.y,vx:Math.cos(targetAngle)*w.speed,vy:Math.sin(targetAngle)*w.speed,owner:entity,damage:w.damage,range:w.range,distTraveled:0,weaponKey:w.key,alive:true,isPoison:true});
+    if(entity.isPlayer){playSound(w.soundType||'shoot');socket.emit('bulletFired',{x:Math.round(entity.x),y:Math.round(entity.y),angle:targetAngle,weaponKey:w.key});}
+    if(w.currentAmmo===0&&S.autoreload)reloadWeapon(entity);
+    return;
+  }
   spawnBullet(entity.x,entity.y,targetAngle,entity,w.key);
   spawnMuzzleFlash(entity.x+Math.cos(targetAngle)*20,entity.y+Math.sin(targetAngle)*20);
   if(entity.isPlayer){
@@ -1635,6 +1997,12 @@ function startOnlineMatch(playersMap, seed) {
   weatherParticles=[];
   if(currentMapType==='snow') weatherType='snow';
   else weatherType='none';
+  // Reset new systems
+  boomerangs=[];firePatches=[];deployedShields=[];deathAnims=[];killEffects=[];poisonedEntities.clear();
+  spectating=false;document.getElementById('spectateBar').style.display='none';
+  matchStats={firstKillDone:false,stormTime:0,inStorm:false,noHit:true,grenadeKill:false,sniperKills:0,meleeKills:0,poisonKill:false,flameKill:false};
+  document.getElementById('challengeHud').style.display='block';
+  updateChallengeHUD();
   gameOver=false;gameRunning=true;
   updateCamera();
   startPosSending();
@@ -1684,6 +2052,11 @@ function startSoloGame() {
   initPlayerInventory();
   remotePlayers={};bullets=[];particles=[];floatingTexts=[];grenades=[];dayTime=0;scopeZoom=1;scopeTarget=1;
   lootCrates=[];weatherParticles=[];weatherType='none';
+  boomerangs=[];firePatches=[];deployedShields=[];deathAnims=[];killEffects=[];poisonedEntities.clear();
+  spectating=false;document.getElementById('spectateBar').style.display='none';
+  matchStats={firstKillDone:false,stormTime:0,inStorm:false,noHit:true,grenadeKill:false,sniperKills:0,meleeKills:0,poisonKill:false,flameKill:false};
+  document.getElementById('challengeHud').style.display='block';
+  updateChallengeHUD();
   serverStorm={centerX:MAP_W/2,centerY:MAP_H/2,radius:MAP_W*0.7,targetRadius:MAP_W*0.45,phase:1,phaseTimer:0,phaseDuration:30,damagePerSec:8};
   gameOver=false;gameRunning=true;
   updateCamera();
@@ -1717,7 +2090,10 @@ function soloStormTick(){
     const d=Math.hypot(player.x-s.centerX,player.y-s.centerY);
     if(d>s.radius&&player.alive){
       player.hp-=s.damagePerSec*dt;
-      if(player.hp<=0){player.hp=0;player.alive=false;clearInterval(soloStormInterval);endGame(false,'Storm',null);}
+      if(player.hp<=0){player.hp=0;player.alive=false;clearInterval(soloStormInterval);
+        const col=SKIN_COLORS.find(sc=>sc.id===(playerSkin.colorId||'green'))?.color||'#00b894';
+        spawnDeathAnim(player.x,player.y,col,playerSkin.deathAnimId||'splat');
+        endGame(false,'Storm',null);}
       document.getElementById('dmgFlash').style.background='rgba(102,0,153,0.3)';
       setTimeout(()=>document.getElementById('dmgFlash').style.background='rgba(102,0,153,0)',200);
     }
@@ -1757,6 +2133,28 @@ function update(dt){
   if(meleeActive){meleeTimer-=dt;if(meleeTimer<=0)meleeActive=false;}
   // Weather
   updateWeather(dt);
+  // New systems
+  updateBoomerangs(dt);
+  updateDeployedShields(dt);
+  updateFirePatches(dt);
+  updateDeathAnims(dt);
+  updateKillEffects(dt);
+  updatePoison(dt);
+  tickPoisonDamage(dt);
+  // Spectate cam
+  if(spectating){
+    const t=spectateTargets[spectateIdx];
+    if(t&&t.alive){cam.x=t.x-canvas.width/(2*scopeZoom);cam.y=t.y-canvas.height/(2*scopeZoom);cam.x=Math.max(0,Math.min(MAP_W-canvas.width/scopeZoom,cam.x));cam.y=Math.max(0,Math.min(MAP_H-canvas.height/scopeZoom,cam.y));}
+    else updateSpectateTarget();
+  }
+  // Match stats: storm time
+  if(player.alive){
+    const dist=Math.hypot(player.x-serverStorm.centerX,player.y-serverStorm.centerY);
+    if(dist>serverStorm.radius){matchStats.stormTime+=dt;if(matchStats.stormTime>10)checkTitleUnlock('stormchaser');}
+    else matchStats.stormTime=0;
+  }
+  // Challenge: survived minutes
+  tickChallenge('survivedMinutes',dt/60);
   // Lerp remote players smoothly
   Object.values(remotePlayers).forEach(rp=>{
     if(!rp.alive) return;
@@ -1767,6 +2165,7 @@ function update(dt){
   bullets.forEach(b=>{
     if(!b.alive)return;b.x+=b.vx*dt;b.y+=b.vy*dt;b.distTraveled+=Math.hypot(b.vx,b.vy)*dt;
     if(b.distTraveled>b.range||b.x<0||b.x>MAP_W||b.y<0||b.y>MAP_H){b.alive=false;return;}
+    if(isBulletBlockedByShield(b.x,b.y)){b.alive=false;return;}
     if(isSolidAt(b.x,b.y)){
       b.alive=false;
       spawnParticle(b.x,b.y,'#aaa',4,80,0.3,3);
@@ -1783,6 +2182,7 @@ function update(dt){
           b.alive=false;
           if(b.splash) spawnExplosion(b.x,b.y);
           socket.emit('reportHit',{targetId:id,damage:b.damage,weaponKey:b.weaponKey});
+          if(b.isPoison)applyPoison(id,5);
         }
       });
     }
@@ -1795,6 +2195,10 @@ function update(dt){
   trailParticles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;});trailParticles=trailParticles.filter(p=>p.life>0);
   updateCamera();
   if(!player.alive&&!gameOver&&!myLobbyId){gameOver=true;endGame(false,null,null);}
+  else if(!player.alive&&!gameOver&&myLobbyId&&!spectating&&Object.values(remotePlayers).some(p=>p.alive)){
+    // Online match: enter spectate instead of end screen immediately
+    enterSpectate();
+  }
   if(S.autopickup&&player.alive&&gameRunning){
     for(const item of groundItems){if(Math.hypot(item.x-player.x,item.y-player.y)<28){tryPickup();break;}}
   }
@@ -1978,6 +2382,13 @@ function render(){
   ctx.beginPath();ctx.arc(s.centerX,s.centerY,s.radius,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
   floatingTexts.forEach(t=>{ctx.globalAlpha=t.life>0.3?1:t.life/0.3;ctx.fillStyle=t.color;ctx.font='bold 16px Oswald';ctx.textAlign='center';ctx.fillText(t.text,t.x,t.y);});
   ctx.globalAlpha=1;
+  // New renders
+  renderFirePatches();
+  renderBoomerangs();
+  renderDeployedShields();
+  renderPoisonEffects();
+  renderDeathAnims();
+  renderKillEffects();
   // Weather (drawn in world space)
   renderWeather();
   ctx.restore();
@@ -2047,6 +2458,15 @@ function endGame(win, winnerName, results) {
   gameRunning=false;
   stopPosSending();
   if(soloStormInterval) clearInterval(soloStormInterval);
+  spectating=false;document.getElementById('spectateBar').style.display='none';
+  document.getElementById('challengeHud').style.display='none';
+  // Title unlocks
+  if(win){checkTitleUnlock('slimelord');if(matchStats.noHit)checkTitleUnlock('untouchable');}
+  if(matchStats.grenadeKill)checkTitleUnlock('boomer');
+  if(matchStats.sniperKills>=3)checkTitleUnlock('sharpshooter');
+  if(matchStats.meleeKills>=3)checkTitleUnlock('berserker');
+  if(matchStats.poisonKill)checkTitleUnlock('poisoner');
+  if(matchStats.flameKill)checkTitleUnlock('pyro');
   document.getElementById('endTitle').textContent=win?'VICTORY!':'ELIMINATED!';
   document.getElementById('endTitle').className='end-title '+(win?'win':'lose');
   document.getElementById('endSub').textContent=win?'🏆 WINNER WINNER SLIMEY DINNER 🏆':'💀 Better luck next time...';
@@ -2157,14 +2577,36 @@ const SKIN_TRAILS = [
   {id:'rainbow',name:'Rainbow',icon:'🌈'},
   {id:'bubbles',name:'Bubbles',icon:'🫧'},
 ];
+const SKIN_DEATH_ANIMS = [
+  {id:'splat',name:'Splat',icon:'💦'},
+  {id:'explode',name:'Explode',icon:'💥'},
+  {id:'melt',name:'Melt',icon:'🫠'},
+  {id:'spin',name:'Spin Out',icon:'🌀'},
+];
+const SKIN_KILL_EFFECTS = [
+  {id:'none',name:'None',icon:'🚫'},
+  {id:'lightning',name:'Lightning',icon:'⚡'},
+  {id:'confetti',name:'Confetti',icon:'🎊'},
+  {id:'fire',name:'Fire Ring',icon:'🔥'},
+];
+const SKIN_WEAPON_COLORS = [
+  {id:'default',name:'Default',color:'#636e72'},
+  {id:'gold',name:'Gold',color:'#f1c40f'},
+  {id:'red',name:'Red Hot',color:'#e74c3c'},
+  {id:'ice',name:'Icy Blue',color:'#74b9ff'},
+  {id:'toxic',name:'Toxic',color:'#2ecc71'},
+  {id:'midnight',name:'Midnight',color:'#2d3436'},
+];
 
-const defaultSkin = { colorId:'green', hatId:'none', faceId:'normal', trailId:'none' };
+const defaultSkin = { colorId:'green', hatId:'none', faceId:'normal', trailId:'none', deathAnimId:'splat', killEffectId:'none', weaponColorId:'default', titleId:'none' };
 let playerSkin = JSON.parse(JSON.stringify(defaultSkin));
 let tempSkin = JSON.parse(JSON.stringify(defaultSkin));
 
 function loadSkins(){
   try{ const s=localStorage.getItem('slimeySkin'); if(s) playerSkin={...defaultSkin,...JSON.parse(s)}; }catch(e){}
   tempSkin = JSON.parse(JSON.stringify(playerSkin));
+  loadTitles();
+  initDailyChallenge();
 }
 
 function showSkins(){
@@ -2217,6 +2659,41 @@ function buildSkinGrids(){
     d.innerHTML=`<span class="skin-icon">${t.icon}</span><span class="skin-name">${t.name}</span>`;
     d.onclick=()=>{ tempSkin.trailId=t.id; buildSkinGrids(); drawSkinPreview(); };
     tg.appendChild(d);
+  });
+  // Death Animations
+  const dg=document.getElementById('skin-deaths'); dg.innerHTML='';
+  SKIN_DEATH_ANIMS.forEach(da=>{
+    const d=document.createElement('div'); d.className='skin-item'+(tempSkin.deathAnimId===da.id?' selected':'');
+    d.innerHTML=`<span class="skin-icon">${da.icon}</span><span class="skin-name">${da.name}</span>`;
+    d.onclick=()=>{ tempSkin.deathAnimId=da.id; buildSkinGrids(); };
+    dg.appendChild(d);
+  });
+  // Kill Effects
+  const kg=document.getElementById('skin-killeffects'); kg.innerHTML='';
+  SKIN_KILL_EFFECTS.forEach(ke=>{
+    const d=document.createElement('div'); d.className='skin-item'+(tempSkin.killEffectId===ke.id?' selected':'');
+    d.innerHTML=`<span class="skin-icon">${ke.icon}</span><span class="skin-name">${ke.name}</span>`;
+    d.onclick=()=>{ tempSkin.killEffectId=ke.id; buildSkinGrids(); };
+    kg.appendChild(d);
+  });
+  // Weapon Colors
+  const wg=document.getElementById('skin-weaponcolors'); wg.innerHTML='';
+  SKIN_WEAPON_COLORS.forEach(wc=>{
+    const d=document.createElement('div'); d.className='skin-item'+(tempSkin.weaponColorId===wc.id?' selected':'');
+    d.innerHTML=`<span class="skin-icon" style="display:block;width:28px;height:10px;border-radius:3px;background:${wc.color};margin:0 auto 8px;margin-top:8px;"></span><span class="skin-name">${wc.name}</span>`;
+    d.onclick=()=>{ tempSkin.weaponColorId=wc.id; buildSkinGrids(); };
+    wg.appendChild(d);
+  });
+  // Titles (only show unlocked ones)
+  const titleg=document.getElementById('skin-titles'); titleg.innerHTML='';
+  ALL_TITLES.forEach(ti=>{
+    const unlocked=unlockedTitles.has(ti.id);
+    const d=document.createElement('div'); d.className='skin-item'+(tempSkin.titleId===ti.id?' selected':'')+(unlocked?'':' locked');
+    d.style.opacity=unlocked?'1':'0.35';
+    d.innerHTML=`<span class="skin-icon">${ti.icon}</span><span class="skin-name">${unlocked?ti.name:'???'}</span>`;
+    if(unlocked) d.onclick=()=>{ tempSkin.titleId=ti.id; buildSkinGrids(); };
+    else d.title=ti.desc;
+    titleg.appendChild(d);
   });
 }
 
@@ -2298,15 +2775,20 @@ function drawPlayerWithSkin(ctx, px, py, pAngle, skin, name, isYou){
   // Gun direction
   ctx.rotate(pAngle);
   const w=player.inventory[player.activeSlot];
-  ctx.fillStyle=w&&!w.isHeal?'#636e72':'rgba(0,0,0,0)';
+  const weaponCol=SKIN_WEAPON_COLORS.find(wc=>wc.id===(skin?.weaponColorId||'default'))?.color||'#636e72';
+  ctx.fillStyle=w&&!w.isHeal?weaponCol:'rgba(0,0,0,0)';
   ctx.fillRect(14,-2.5,w&&!w.isHeal?18:0,w&&!w.isHeal?5:0);
   ctx.restore();
-  // Name tag
+  // Name tag + title
   if(!isYou){
     ctx.font='bold 10px Oswald'; ctx.textAlign='center';
+    const titleObj=ALL_TITLES.find(t=>t.id===(skin?.titleId||'none'));
+    const titleStr=titleObj&&titleObj.id!=='none'?titleObj.icon+' '+titleObj.name:'';
     const tw=ctx.measureText(name||'').width+12;
-    ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillRect(px-tw/2,py-16-30,tw,14);
+    const tagH=titleStr?26:14;
+    ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillRect(px-tw/2,py-16-30,tw,tagH);
     ctx.fillStyle=col.color2; ctx.fillText(name||'',px,py-16-18);
+    if(titleStr){ctx.fillStyle='#00ffe7';ctx.font='bold 8px Share Tech Mono';ctx.fillText(titleStr,px,py-16-8);}
   }
 }
 
