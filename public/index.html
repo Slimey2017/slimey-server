@@ -258,7 +258,7 @@
   .skin-item .skin-icon{font-size:24px;display:block;margin-bottom:4px;}
   .skin-item .skin-name{color:#aaa;font-size:10px;font-family:'Share Tech Mono',monospace;}
   .skin-item.selected .skin-name{color:var(--gold);}
-  .skins-footer{padding:14px 24px;border-top:1px solid #1a2a3a;display:flex;justify-content:flex-end;gap:10px;}
+  @keyframes killStreakAnim{0%{opacity:0;transform:translateX(-50%) scale(0.5)}15%{opacity:1;transform:translateX(-50%) scale(1.1)}25%{transform:translateX(-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-30px)}}
 </style>
 </head>
 <body>
@@ -937,6 +937,7 @@ socket.on('hitConfirmed', ({ targetId, damage, hp }) => {
   const rp = remotePlayers[targetId];
   if (rp) { rp.hp = hp; addFloatingText(rp.x, rp.y - 25, `${Math.round(damage)}`, '#fff'); spawnBlood(rp.x, rp.y); }
   playSound('hit');
+  playSound('hitbeep'); // satisfying confirmation tick
 });
 
 socket.on('playerEliminated', ({ id, name, killedBy, killerScore }) => {
@@ -952,10 +953,9 @@ socket.on('playerEliminated', ({ id, name, killedBy, killerScore }) => {
   if (isYouKiller) {
     player.score++;
     if(rp) spawnKillEffect(rp.x, rp.y, playerSkin.killEffectId||'none');
-    // Title tracking
-    matchStats.grenadeKill = matchStats.grenadeKill; // handled per-weapon
     if(!matchStats.firstKillDone){matchStats.firstKillDone=true;checkTitleUnlock('firstblood');}
     tickChallenge('grenadeKills');
+    addKillToStreak();
   }
   addKillFeed(`${isYouKiller ? '💀' : '⚔️'} ${killedBy} eliminated ${name}`, isYouKiller ? 'player-kill' : 'enemy-kill');
   addLiveGameChat('SYSTEM', `${killedBy} ▶ ${name}`, '#f1c40f');
@@ -1179,11 +1179,17 @@ window.addEventListener('resize', () => { canvas.width = window.innerWidth; canv
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx;
 function getAudio(){if(!audioCtx)audioCtx=new AudioCtx();return audioCtx;}
-function playSound(type){try{const ac=getAudio();const g=ac.createGain();g.connect(ac.destination);if(type==='shoot'){const o=ac.createOscillator();const n=ac.createGain();o.connect(n);n.connect(g);o.frequency.setValueAtTime(220,ac.currentTime);o.frequency.exponentialRampToValueAtTime(80,ac.currentTime+0.1);n.gain.setValueAtTime(0.3,ac.currentTime);n.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.12);o.start();o.stop(ac.currentTime+0.12);const buf=ac.createBuffer(1,ac.sampleRate*0.08,ac.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.5;const s=ac.createBufferSource();s.buffer=buf;const ng=ac.createGain();ng.gain.setValueAtTime(0.4,ac.currentTime);ng.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.08);s.connect(ng);ng.connect(g);s.start();g.gain.value=0.6;}else if(type==='hit'){const o=ac.createOscillator();o.connect(g);o.frequency.setValueAtTime(440,ac.currentTime);o.frequency.exponentialRampToValueAtTime(200,ac.currentTime+0.05);g.gain.setValueAtTime(0.5,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.08);o.start();o.stop(ac.currentTime+0.08);}else if(type==='pickup'){[523,659,784].forEach((f,i)=>{const o=ac.createOscillator();o.connect(g);o.frequency.value=f;g.gain.setValueAtTime(0.3,ac.currentTime+i*0.07);o.start(ac.currentTime+i*0.07);o.stop(ac.currentTime+i*0.07+0.08);});}else if(type==='heal'){[523,659,784,1046].forEach((f,i)=>{const o=ac.createOscillator();o.type='sine';o.connect(g);o.frequency.value=f;g.gain.setValueAtTime(0.25,ac.currentTime+i*0.08);o.start(ac.currentTime+i*0.08);o.stop(ac.currentTime+i*0.08+0.1);});}else if(type==='reload'){const o=ac.createOscillator();o.connect(g);o.frequency.setValueAtTime(300,ac.currentTime);o.frequency.linearRampToValueAtTime(400,ac.currentTime+0.15);g.gain.setValueAtTime(0.3,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.2);o.start();o.stop(ac.currentTime+0.2);}else if(type==='die'){const o=ac.createOscillator();o.connect(g);o.frequency.setValueAtTime(600,ac.currentTime);o.frequency.exponentialRampToValueAtTime(50,ac.currentTime+0.4);g.gain.setValueAtTime(0.5,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.4);o.start();o.stop(ac.currentTime+0.4);}else if(type==='storm'){const o=ac.createOscillator();o.type='sawtooth';o.connect(g);o.frequency.value=80;g.gain.setValueAtTime(0.15,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.3);o.start();o.stop(ac.currentTime+0.3);}else if(type==='shotgun'){for(let k=0;k<3;k++){const buf=ac.createBuffer(1,ac.sampleRate*0.15,ac.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1);const s=ac.createBufferSource();s.buffer=buf;const ng=ac.createGain();ng.gain.setValueAtTime(0.4,ac.currentTime+k*0.02);ng.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+k*0.02+0.15);s.connect(ng);ng.connect(g);s.start(ac.currentTime+k*0.02);}g.gain.value=0.7;}else if(type==='snipe'){const o=ac.createOscillator();o.connect(g);o.frequency.setValueAtTime(800,ac.currentTime);o.frequency.exponentialRampToValueAtTime(100,ac.currentTime+0.3);g.gain.setValueAtTime(0.7,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.3);o.start();o.stop(ac.currentTime+0.3);}else if(type==='victory'){[523,659,784,1046,1318].forEach((f,i)=>{const o=ac.createOscillator();o.type='triangle';o.connect(g);o.frequency.value=f;g.gain.setValueAtTime(0.4,ac.currentTime+i*0.12);o.start(ac.currentTime+i*0.12);o.stop(ac.currentTime+i*0.12+0.2);});}}catch(e){}}
+function playSound(type){try{const ac=getAudio();const g=ac.createGain();g.connect(ac.destination);if(type==='shoot'){const o=ac.createOscillator();const n=ac.createGain();o.connect(n);n.connect(g);o.frequency.setValueAtTime(220,ac.currentTime);o.frequency.exponentialRampToValueAtTime(80,ac.currentTime+0.1);n.gain.setValueAtTime(0.3,ac.currentTime);n.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.12);o.start();o.stop(ac.currentTime+0.12);const buf=ac.createBuffer(1,ac.sampleRate*0.08,ac.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.5;const s=ac.createBufferSource();s.buffer=buf;const ng=ac.createGain();ng.gain.setValueAtTime(0.4,ac.currentTime);ng.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.08);s.connect(ng);ng.connect(g);s.start();g.gain.value=0.6;}else if(type==='hit'){const o=ac.createOscillator();o.connect(g);o.frequency.setValueAtTime(440,ac.currentTime);o.frequency.exponentialRampToValueAtTime(200,ac.currentTime+0.05);g.gain.setValueAtTime(0.5,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.08);o.start();o.stop(ac.currentTime+0.08);}else if(type==='pickup'){[523,659,784].forEach((f,i)=>{const o=ac.createOscillator();o.connect(g);o.frequency.value=f;g.gain.setValueAtTime(0.3,ac.currentTime+i*0.07);o.start(ac.currentTime+i*0.07);o.stop(ac.currentTime+i*0.07+0.08);});}else if(type==='heal'){[523,659,784,1046].forEach((f,i)=>{const o=ac.createOscillator();o.type='sine';o.connect(g);o.frequency.value=f;g.gain.setValueAtTime(0.25,ac.currentTime+i*0.08);o.start(ac.currentTime+i*0.08);o.stop(ac.currentTime+i*0.08+0.1);});}else if(type==='reload'){const o=ac.createOscillator();o.connect(g);o.frequency.setValueAtTime(300,ac.currentTime);o.frequency.linearRampToValueAtTime(400,ac.currentTime+0.15);g.gain.setValueAtTime(0.3,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.2);o.start();o.stop(ac.currentTime+0.2);}else if(type==='die'){const o=ac.createOscillator();o.connect(g);o.frequency.setValueAtTime(600,ac.currentTime);o.frequency.exponentialRampToValueAtTime(50,ac.currentTime+0.4);g.gain.setValueAtTime(0.5,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.4);o.start();o.stop(ac.currentTime+0.4);}else if(type==='storm'){const o=ac.createOscillator();o.type='sawtooth';o.connect(g);o.frequency.value=80;g.gain.setValueAtTime(0.15,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.3);o.start();o.stop(ac.currentTime+0.3);}else if(type==='shotgun'){for(let k=0;k<3;k++){const buf=ac.createBuffer(1,ac.sampleRate*0.15,ac.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1);const s=ac.createBufferSource();s.buffer=buf;const ng=ac.createGain();ng.gain.setValueAtTime(0.4,ac.currentTime+k*0.02);ng.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+k*0.02+0.15);s.connect(ng);ng.connect(g);s.start(ac.currentTime+k*0.02);}g.gain.value=0.7;}else if(type==='snipe'){const o=ac.createOscillator();o.connect(g);o.frequency.setValueAtTime(800,ac.currentTime);o.frequency.exponentialRampToValueAtTime(100,ac.currentTime+0.3);g.gain.setValueAtTime(0.7,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.3);o.start();o.stop(ac.currentTime+0.3);}else if(type==='victory'){[523,659,784,1046,1318,784,1046,1318,1568,2093].forEach((f,i)=>{const o=ac.createOscillator();o.type=i>6?'triangle':'sine';o.connect(g);o.frequency.value=f;g.gain.setValueAtTime(0.35,ac.currentTime+i*0.1);o.start(ac.currentTime+i*0.1);o.stop(ac.currentTime+i*0.1+0.18);});}
+else if(type==='hitbeep'){const o=ac.createOscillator();o.type='square';o.connect(g);o.frequency.value=1200;g.gain.setValueAtTime(0.15,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.05);o.start();o.stop(ac.currentTime+0.05);}
+else if(type==='footstep'){const buf=ac.createBuffer(1,ac.sampleRate*0.04,ac.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.3*(1-i/d.length);const s=ac.createBufferSource();s.buffer=buf;const ng=ac.createGain();ng.gain.value=0.08;s.connect(ng);ng.connect(g);s.start();}
+else if(type==='reload_ar'){const o=ac.createOscillator();o.connect(g);o.frequency.setValueAtTime(500,ac.currentTime);o.frequency.linearRampToValueAtTime(250,ac.currentTime+0.12);g.gain.setValueAtTime(0.25,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.15);o.start();o.stop(ac.currentTime+0.15);}
+else if(type==='reload_shotgun'){const buf=ac.createBuffer(1,ac.sampleRate*0.2,ac.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(i<d.length*0.3?0.5:0.1);const s=ac.createBufferSource();s.buffer=buf;const ng=ac.createGain();ng.gain.setValueAtTime(0.5,ac.currentTime);ng.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.2);s.connect(ng);ng.connect(g);s.start();}
+else if(type==='reload_pistol'){[400,600].forEach((f,i)=>{const o=ac.createOscillator();o.connect(g);o.frequency.value=f;g.gain.setValueAtTime(0.2,ac.currentTime+i*0.1);o.start(ac.currentTime+i*0.1);o.stop(ac.currentTime+i*0.1+0.07);});}
+else if(type==='stormproximity'){const o=ac.createOscillator();o.type='sine';o.connect(g);o.frequency.value=40;g.gain.setValueAtTime(0,ac.currentTime);g.gain.linearRampToValueAtTime(0.1,ac.currentTime+0.2);g.gain.linearRampToValueAtTime(0,ac.currentTime+0.5);o.start();o.stop(ac.currentTime+0.5);}}catch(e){}}
 
 // ---- CONSTANTS ----
 const MAP_W=3200,MAP_H=3200;
-const WEAPONS={pistol:{name:'Pistol',icon:'🔫',color:'#aaa',damage:25,fireRate:400,ammo:12,maxAmmo:12,speed:900,spread:0.05,reloadTime:1200,range:600,auto:false,soundType:'shoot'},ar:{name:'Assault Rifle',icon:'⚙️',color:'#5d8a4e',damage:20,fireRate:150,ammo:30,maxAmmo:30,speed:1000,spread:0.08,reloadTime:2000,range:700,auto:true,soundType:'shoot'},shotgun:{name:'Shotgun',icon:'💥',color:'#c0392b',damage:18,fireRate:800,ammo:6,maxAmmo:6,speed:700,spread:0.25,pellets:6,reloadTime:2500,range:350,auto:false,soundType:'shotgun'},sniper:{name:'Sniper',icon:'🎯',color:'#2c3e50',damage:120,fireRate:1500,ammo:5,maxAmmo:5,speed:1400,spread:0.01,reloadTime:3000,range:1200,auto:false,soundType:'snipe'},smg:{name:'SMG',icon:'🔩',color:'#7f8c8d',damage:14,fireRate:80,ammo:35,maxAmmo:35,speed:900,spread:0.15,reloadTime:1500,range:450,auto:true,soundType:'shoot'},rocket:{name:'Rocket',icon:'🚀',color:'#e67e22',damage:80,fireRate:2000,ammo:3,maxAmmo:3,speed:400,spread:0.02,reloadTime:3500,range:900,auto:false,soundType:'shoot',splash:60},minigun:{name:'Minigun',icon:'🌀',color:'#e74c3c',damage:12,fireRate:60,ammo:100,maxAmmo:100,speed:900,spread:0.2,reloadTime:4000,range:500,auto:true,soundType:'shoot'},grenade:{name:'Grenade',icon:'💣',color:'#2ecc71',damage:70,fireRate:1200,ammo:3,maxAmmo:3,speed:500,spread:0.05,reloadTime:2000,range:600,auto:false,soundType:'shoot',isGrenade:true,splash:90},knife:{name:'Knife',icon:'🔪',color:'#ecf0f1',damage:50,fireRate:600,ammo:1,maxAmmo:1,speed:0,spread:0,reloadTime:0,range:55,auto:false,soundType:'hit',isMelee:true},bat:{name:'Bat',icon:'🏏',color:'#8B6914',damage:35,fireRate:500,ammo:1,maxAmmo:1,speed:0,spread:0,reloadTime:0,range:65,auto:false,soundType:'hit',isMelee:true},flamethrower:{name:'Flamethrower',icon:'🔥',color:'#e74c3c',damage:8,fireRate:80,ammo:60,maxAmmo:60,speed:280,spread:0.4,reloadTime:3000,range:180,auto:true,soundType:'shoot',isFlame:true},boomerang:{name:'Boomerang',icon:'🪃',color:'#e67e22',damage:30,fireRate:1000,ammo:2,maxAmmo:2,speed:420,spread:0.02,reloadTime:2000,range:500,auto:false,soundType:'shoot',isBoomerang:true},deployshield:{name:'Deploy Shield',icon:'🛡️',color:'#3498db',damage:0,fireRate:1500,ammo:2,maxAmmo:2,speed:0,spread:0,reloadTime:2500,range:0,auto:false,soundType:'reload',isDeployShield:true},poisondart:{name:'Poison Dart',icon:'☠️',color:'#27ae60',damage:10,fireRate:600,ammo:8,maxAmmo:8,speed:550,spread:0.03,reloadTime:1800,range:700,auto:false,soundType:'shoot',isPoison:true},healpack:{name:'Med Kit',icon:'💊',color:'#2ecc71',isHeal:true,healAmt:50,hpType:'hp'},shield:{name:'Shield Pot',icon:'🔵',color:'#3498db',isHeal:true,healAmt:50,hpType:'shield'},bandage:{name:'Bandage',icon:'🩹',color:'#27ae60',isHeal:true,healAmt:15,hpType:'hp'}};
+const WEAPONS={pistol:{name:'Pistol',icon:'🔫',color:'#aaa',damage:25,fireRate:400,ammo:12,maxAmmo:12,speed:900,spread:0.05,reloadTime:1200,range:600,auto:false,soundType:'shoot'},ar:{name:'Assault Rifle',icon:'⚙️',color:'#5d8a4e',damage:20,fireRate:150,ammo:30,maxAmmo:30,speed:1000,spread:0.08,reloadTime:2000,range:700,auto:true,soundType:'shoot'},shotgun:{name:'Shotgun',icon:'💥',color:'#c0392b',damage:18,fireRate:800,ammo:6,maxAmmo:6,speed:700,spread:0.25,pellets:6,reloadTime:2500,range:350,auto:false,soundType:'shotgun'},smg:{name:'SMG',icon:'🔩',color:'#7f8c8d',damage:14,fireRate:80,ammo:35,maxAmmo:35,speed:900,spread:0.15,reloadTime:1500,range:450,auto:true,soundType:'shoot'},rocket:{name:'Rocket',icon:'🚀',color:'#e67e22',damage:80,fireRate:2000,ammo:3,maxAmmo:3,speed:400,spread:0.02,reloadTime:3500,range:900,auto:false,soundType:'shoot',splash:60},minigun:{name:'Minigun',icon:'🌀',color:'#e74c3c',damage:12,fireRate:60,ammo:100,maxAmmo:100,speed:900,spread:0.2,reloadTime:4000,range:500,auto:true,soundType:'shoot'},crossbow:{name:'Crossbow',icon:'🏹',color:'#8B6914',damage:60,fireRate:800,ammo:6,maxAmmo:6,speed:700,spread:0,reloadTime:2000,range:1000,auto:false,soundType:'shoot',pierce:true},grenade:{name:'Grenade',icon:'💣',color:'#2ecc71',damage:70,fireRate:1200,ammo:3,maxAmmo:3,speed:500,spread:0.05,reloadTime:2000,range:600,auto:false,soundType:'shoot',isGrenade:true,splash:90},landmine:{name:'Landmine',icon:'💀',color:'#e74c3c',damage:80,fireRate:1000,ammo:2,maxAmmo:2,speed:0,spread:0,reloadTime:2000,range:0,auto:false,soundType:'reload',isLandmine:true},smokegrenade:{name:'Smoke Grenade',icon:'💨',color:'#95a5a6',damage:0,fireRate:1000,ammo:2,maxAmmo:2,speed:400,spread:0.05,reloadTime:1800,range:500,auto:false,soundType:'reload',isSmoke:true},knife:{name:'Knife',icon:'🔪',color:'#ecf0f1',damage:50,fireRate:600,ammo:1,maxAmmo:1,speed:0,spread:0,reloadTime:0,range:55,auto:false,soundType:'hit',isMelee:true},bat:{name:'Bat',icon:'🏏',color:'#8B6914',damage:35,fireRate:500,ammo:1,maxAmmo:1,speed:0,spread:0,reloadTime:0,range:65,auto:false,soundType:'hit',isMelee:true},flamethrower:{name:'Flamethrower',icon:'🔥',color:'#e74c3c',damage:8,fireRate:80,ammo:60,maxAmmo:60,speed:280,spread:0.4,reloadTime:3000,range:180,auto:true,soundType:'shoot',isFlame:true},boomerang:{name:'Boomerang',icon:'🪃',color:'#e67e22',damage:30,fireRate:1000,ammo:2,maxAmmo:2,speed:420,spread:0.02,reloadTime:2000,range:500,auto:false,soundType:'shoot',isBoomerang:true},deployshield:{name:'Deploy Shield',icon:'🛡️',color:'#3498db',damage:0,fireRate:1500,ammo:2,maxAmmo:2,speed:0,spread:0,reloadTime:2500,range:0,auto:false,soundType:'reload',isDeployShield:true},poisondart:{name:'Poison Dart',icon:'☠️',color:'#27ae60',damage:10,fireRate:600,ammo:8,maxAmmo:8,speed:550,spread:0.03,reloadTime:1800,range:700,auto:false,soundType:'shoot',isPoison:true},healpack:{name:'Med Kit',icon:'💊',color:'#2ecc71',isHeal:true,healAmt:50,hpType:'hp'},shield:{name:'Shield Pot',icon:'🔵',color:'#3498db',isHeal:true,healAmt:50,hpType:'shield'},bandage:{name:'Bandage',icon:'🩹',color:'#27ae60',isHeal:true,healAmt:15,hpType:'hp'}};
 
 let particles=[];
 function spawnParticle(x,y,color,count=8,speed=120,life=0.5,size=4){for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2;const s=(Math.random()*0.5+0.5)*speed;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,color,life,maxLife:life,size:Math.random()*size+1});}}
@@ -1432,15 +1438,15 @@ function resolveCollision(entity,newX,newY){const r=(entity.radius||16)+2;if(!is
 
 // Loot
 let groundItems=[];
-const WEAPON_POOL=['pistol','ar','shotgun','sniper','smg','rocket','minigun','grenade','grenade','knife','bat','flamethrower','boomerang','deployshield','poisondart','healpack','shield','bandage','bandage','healpack','shield'];
+const WEAPON_POOL=['pistol','ar','shotgun','smg','rocket','minigun','crossbow','grenade','grenade','landmine','smokegrenade','knife','bat','flamethrower','boomerang','deployshield','poisondart','healpack','shield','bandage','bandage','healpack','shield'];
 function spawnGroundItems(seed=42){groundItems=[];const rng=seededRand(seed+1);lootSpawns.forEach(s=>{if(rng()<0.6){const wKey=WEAPON_POOL[Math.floor(rng()*WEAPON_POOL.length)];const def=WEAPONS[wKey];const item={x:s.x,y:s.y,key:wKey,...def};if(!def.isHeal)item.currentAmmo=def.ammo;groundItems.push(item);}});}
 
 // Bullets
 let bullets=[];
 function spawnBullet(x,y,angle,owner,weaponKey){
-  const w=WEAPONS[weaponKey];if(!w||w.isMelee||w.isGrenade)return;const sp=w.spread||0;const pellets=w.pellets||1;
+  const w=WEAPONS[weaponKey];if(!w||w.isMelee||w.isGrenade||w.isLandmine||w.isSmoke)return;const sp=w.spread||0;const pellets=w.pellets||1;
   for(let p=0;p<pellets;p++){const a=angle+(Math.random()-0.5)*sp*2;
-    bullets.push({x,y,vx:Math.cos(a)*w.speed,vy:Math.sin(a)*w.speed,owner,damage:w.damage,range:w.range||700,distTraveled:0,splash:w.splash||0,weaponKey,alive:true});}
+    bullets.push({x,y,vx:Math.cos(a)*w.speed,vy:Math.sin(a)*w.speed,owner,damage:w.damage,range:w.range||700,distTraveled:0,splash:w.splash||0,weaponKey,alive:true,isPoison:false,pierce:w.pierce||false});}
 }
 
 // Player state
@@ -1473,8 +1479,105 @@ let grenadeLastThrow=0;
 // ---- MELEE ----
 let meleeActive=false,meleeTimer=0,meleeAngle=0,meleeLastSwing=0;
 
-// ---- SCOPE ----
-let scopeZoom=1, scopeTarget=1;
+// ---- DUOS MODE ----
+const DUOS_SERVERS = new Set(['official-na-east-1','official-eu-west-2','custom-slimewars']);
+
+// ---- KILL STREAK ----
+let killStreak=0, killStreakTimer=0;
+function addKillToStreak(){
+  killStreak++;killStreakTimer=4;
+  const msgs={2:'DOUBLE KILL! 💥',3:'TRIPLE KILL! 🔥',4:'QUAD KILL! ⚡',5:'RAMPAGE! 🌀',6:'UNSTOPPABLE! 👑'};
+  const msg=msgs[killStreak]||( killStreak>6?`${killStreak}X KILL STREAK! 🔥`:null);
+  if(msg){
+    // Big floating banner
+    const banner=document.createElement('div');
+    banner.style.cssText=`position:fixed;top:35%;left:50%;transform:translateX(-50%);font-family:'Bangers',cursive;font-size:36px;letter-spacing:4px;color:#f1c40f;text-shadow:0 0 20px rgba(241,196,15,0.8),2px 2px 0 #000;animation:killStreakAnim 2.5s forwards;pointer-events:none;z-index:9000;white-space:nowrap;`;
+    banner.textContent=msg;
+    document.body.appendChild(banner);
+    setTimeout(()=>banner.remove(),2500);
+    playSound('victory'); // short celebratory sound
+  }
+}
+function updateKillStreak(dt){if(killStreak>0){killStreakTimer-=dt;if(killStreakTimer<=0){killStreak=0;killStreakTimer=0;}}}
+
+// ---- LANDMINES ----
+let placedMines=[]; // {x,y,armed,timer,owner}
+function placeLandmine(){
+  if(!gameRunning||!player.alive)return;
+  const w=player.inventory[player.activeSlot];
+  if(!w||!w.isLandmine)return;
+  const now=performance.now();
+  if(now-player.lastFireTime<w.fireRate)return;
+  if(w.currentAmmo<=0){return;}
+  player.lastFireTime=now;w.currentAmmo--;
+  placedMines.push({x:player.x,y:player.y,armed:false,armTimer:1.5,owner:player,alive:true});
+  playSound('reload');
+  addFloatingText(player.x,player.y-30,'💀 Mine placed!','#e74c3c');
+}
+function updateMines(dt){
+  placedMines.forEach(m=>{
+    if(!m.alive)return;
+    if(!m.armed){m.armTimer-=dt;if(m.armTimer<=0)m.armed=true;return;}
+    // Check if any remote player walks over
+    Object.entries(remotePlayers).forEach(([id,rp])=>{
+      if(!rp.alive||!m.alive)return;
+      if(Math.hypot(rp.x-m.x,rp.y-m.y)<22){
+        m.alive=false;
+        spawnExplosion(m.x,m.y);playSound('shotgun');
+        socket.emit('reportHit',{targetId:id,damage:80,weaponKey:'landmine'});
+        addFloatingText(m.x,m.y-20,'💥 MINE!','#e74c3c');
+      }
+    });
+    // Check player self (shouldn't trigger own mine but can if they stand on it)
+  });
+  placedMines=placedMines.filter(m=>m.alive);
+}
+function renderMines(){
+  placedMines.forEach(m=>{
+    const pulse=m.armed?(Math.sin(Date.now()/200)*0.4+0.6):0.3;
+    ctx.globalAlpha=pulse;
+    ctx.fillStyle=m.armed?'#e74c3c':'#888';
+    ctx.beginPath();ctx.arc(m.x,m.y,8,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#111';ctx.beginPath();ctx.arc(m.x,m.y,4,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  });
+}
+
+// ---- SMOKE GRENADES ----
+let smokeZones=[]; // {x,y,r,timer,maxTimer}
+function throwSmoke(angle){
+  if(!gameRunning||!player.alive)return;
+  const w=player.inventory.find(s=>s&&s.isSmoke);
+  if(!w||w.currentAmmo<=0)return;
+  w.currentAmmo--;if(w.currentAmmo<=0){const idx=player.inventory.findIndex(s=>s&&s.isSmoke);if(idx>=0)player.inventory[idx]=null;}
+  const wx=mouseX+cam.x,wy=mouseY+cam.y;
+  const a=Math.atan2(wy-player.y,wx-player.x);
+  const dist=Math.min(300,Math.hypot(wx-player.x,wy-player.y));
+  smokeZones.push({x:player.x+Math.cos(a)*dist,y:player.y+Math.sin(a)*dist,r:80,timer:6,maxTimer:6});
+  playSound('reload');
+  addFloatingText(player.x,player.y-30,'💨 Smoke!','#95a5a6');
+  socket.emit('bulletFired',{x:Math.round(player.x),y:Math.round(player.y),angle:a,weaponKey:'smokegrenade'});
+}
+function updateSmoke(dt){smokeZones.forEach(s=>s.timer-=dt);smokeZones=smokeZones.filter(s=>s.timer>0);}
+function renderSmoke(){
+  smokeZones.forEach(s=>{
+    const fade=Math.min(1,s.timer/1.5)*Math.min(1,(s.maxTimer-s.timer)/0.5+0.3);
+    ctx.globalAlpha=fade*0.55;
+    ctx.fillStyle='rgba(149,165,166,0.8)';
+    ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=fade*0.3;
+    ctx.fillStyle='rgba(200,210,210,0.6)';
+    ctx.beginPath();ctx.arc(s.x+10*Math.sin(Date.now()/800),s.y,s.r*0.7,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  });
+}
+function isInSmoke(x,y){
+  for(const s of smokeZones)if(Math.hypot(x-s.x,y-s.y)<s.r)return true;
+  return false;
+}
+
+// ---- SCOPE (simplified, no sniper needed but kept for zoom variable) ----
+let scopeZoom=1;
 
 // ---- DAY/NIGHT ----
 let dayTime=0; // 0=day, goes to 1=night over match duration (~5 min)
@@ -1587,14 +1690,6 @@ function swingMelee(){
   });
   // Particles
   for(let i=0;i<8;i++){const a=meleeAngle+(Math.random()-0.5)*1.2;spawnParticle(player.x+Math.cos(meleeAngle)*40,player.y+Math.sin(meleeAngle)*40,'#ecf0f1',1,80,0.3,3);}
-}
-
-// ---- SCOPE ZOOM ----
-function updateScope(dt){
-  const w=player.inventory[player.activeSlot];
-  const isSniper=w&&w.key==='sniper';
-  scopeTarget=isSniper&&mouseDown?0.35:1;
-  scopeZoom+=(scopeTarget-scopeZoom)*8*dt;
 }
 
 // ---- DIRECTIONAL AUDIO ----
@@ -1912,11 +2007,13 @@ function renderPoisonEffects(){
 function tryPickup(){let closest=null,cd=Infinity;for(const item of groundItems){const d=Math.hypot(item.x-player.x,item.y-player.y);if(d<60&&d<cd){closest=item;cd=d;}}if(!closest)return;let slot=player.inventory.findIndex(s=>s===null);if(slot===-1)slot=player.activeSlot;if(player.inventory[slot]){const old=player.inventory[slot];groundItems.push({...old,x:player.x+Math.random()*30-15,y:player.y+Math.random()*30-15});}player.inventory[slot]=closest;groundItems.splice(groundItems.indexOf(closest),1);playSound('pickup');addFloatingText(player.x,player.y-30,`+${closest.name||closest.key}`,'#f1c40f');}
 function dropItem(){const item=player.inventory[player.activeSlot];if(!item)return;groundItems.push({...item,x:player.x+20,y:player.y});player.inventory[player.activeSlot]=null;}
 function useHeal(){for(let i=0;i<5;i++){const it=player.inventory[i];if(!it||!it.isHeal)continue;if(it.hpType==='hp'&&player.hp>=player.maxHp)continue;if(it.hpType==='shield'&&player.shield>=player.maxShield)continue;const amount=it.healAmt;if(it.hpType==='hp')player.hp=Math.min(player.maxHp,player.hp+amount);else player.shield=Math.min(player.maxShield,player.shield+amount);playSound('heal');spawnHealEffect(player.x,player.y);addFloatingText(player.x,player.y-30,`+${amount} ${it.hpType==='hp'?'HP':'Shield'}`,'#2ecc71');document.getElementById('healFlash').style.background='rgba(39,174,96,0.25)';setTimeout(()=>document.getElementById('healFlash').style.background='rgba(39,174,96,0)',200);player.inventory[i]=null;return;}}
-function reloadWeapon(entity){const w=entity.inventory[entity.activeSlot||0];if(!w||w.isHeal||w.isMelee||w.isGrenade||entity.reloading)return;if(w.currentAmmo===w.maxAmmo)return;entity.reloading=true;entity.reloadStart=performance.now();if(entity.isPlayer)playSound('reload');}
+function reloadWeapon(entity){const w=entity.inventory[entity.activeSlot||0];if(!w||w.isHeal||w.isMelee||w.isGrenade||w.isLandmine||w.isSmoke||entity.reloading)return;if(w.currentAmmo===w.maxAmmo)return;entity.reloading=true;entity.reloadStart=performance.now();if(entity.isPlayer){const snd={ar:'reload_ar',shotgun:'reload_shotgun',pistol:'reload_pistol'}[w.key]||'reload';playSound(snd);}}
 function tryShoot(entity,targetAngle){
   if(!entity.alive)return;const w=entity.inventory[entity.activeSlot||0];if(!w||w.isHeal||entity.reloading)return;
   if(w.isMelee){if(entity.isPlayer)swingMelee();return;}
   if(w.isGrenade){if(entity.isPlayer)throwGrenade();return;}
+  if(w.isLandmine){if(entity.isPlayer)placeLandmine();return;}
+  if(w.isSmoke){if(entity.isPlayer)throwSmoke(targetAngle);return;}
   if(w.isBoomerang){if(entity.isPlayer){const now=performance.now();if(now-entity.lastFireTime<w.fireRate)return;if(w.currentAmmo<=0){reloadWeapon(entity);return;}entity.lastFireTime=now;w.currentAmmo--;spawnBoomerang(entity.x,entity.y,targetAngle,entity);playSound('shoot');socket.emit('bulletFired',{x:Math.round(entity.x),y:Math.round(entity.y),angle:targetAngle,weaponKey:w.key});if(w.currentAmmo===0&&S.autoreload)reloadWeapon(entity);}return;}
   if(w.isDeployShield){if(entity.isPlayer)placeDeployShield();return;}
   const now=performance.now();if(now-entity.lastFireTime<w.fireRate)return;if(w.currentAmmo<=0){reloadWeapon(entity);return;}
@@ -1991,7 +2088,7 @@ function startOnlineMatch(playersMap, seed) {
   // Sync remote players
   syncRemotePlayers(playersMap);
 
-  bullets=[];particles=[];floatingTexts=[];grenades=[];dayTime=0;scopeZoom=1;scopeTarget=1;
+  bullets=[];particles=[];floatingTexts=[];grenades=[];dayTime=0;scopeZoom=1;
   lootCrates=lootCrates.filter(c=>!c.opened);
   barriacades=barriacades.filter(b=>!b.destroyed);
   weatherParticles=[];
@@ -1999,6 +2096,7 @@ function startOnlineMatch(playersMap, seed) {
   else weatherType='none';
   // Reset new systems
   boomerangs=[];firePatches=[];deployedShields=[];deathAnims=[];killEffects=[];poisonedEntities.clear();
+  placedMines=[];smokeZones=[];killStreak=0;killStreakTimer=0;
   spectating=false;document.getElementById('spectateBar').style.display='none';
   matchStats={firstKillDone:false,stormTime:0,inStorm:false,noHit:true,grenadeKill:false,sniperKills:0,meleeKills:0,poisonKill:false,flameKill:false};
   document.getElementById('challengeHud').style.display='block';
@@ -2050,9 +2148,10 @@ function startSoloGame() {
   player.alive=true;player.score=0;player.kills=[];player.reloading=false;player.name=playerUsername;
   document.getElementById('playerNameHud').textContent='🟢 '+playerUsername;
   initPlayerInventory();
-  remotePlayers={};bullets=[];particles=[];floatingTexts=[];grenades=[];dayTime=0;scopeZoom=1;scopeTarget=1;
+  remotePlayers={};bullets=[];particles=[];floatingTexts=[];grenades=[];dayTime=0;scopeZoom=1;
   lootCrates=[];weatherParticles=[];weatherType='none';
   boomerangs=[];firePatches=[];deployedShields=[];deathAnims=[];killEffects=[];poisonedEntities.clear();
+  placedMines=[];smokeZones=[];killStreak=0;killStreakTimer=0;
   spectating=false;document.getElementById('spectateBar').style.display='none';
   matchStats={firstKillDone:false,stormTime:0,inStorm:false,noHit:true,grenadeKill:false,sniperKills:0,meleeKills:0,poisonKill:false,flameKill:false};
   document.getElementById('challengeHud').style.display='block';
@@ -2115,7 +2214,12 @@ function update(dt){
     let pdx=0,pdy=0;
     if(keys[S.keys.up]||keys['ArrowUp'])pdy-=1;if(keys[S.keys.down]||keys['ArrowDown'])pdy+=1;
     if(keys[S.keys.left]||keys['ArrowLeft'])pdx-=1;if(keys[S.keys.right]||keys['ArrowRight'])pdx+=1;
-    if(pdx||pdy){const plen=Math.hypot(pdx,pdy);const nx=player.x+(pdx/plen)*player.speed*dt,ny=player.y+(pdy/plen)*player.speed*dt;const pos=resolveCollision(player,nx,ny);player.x=Math.max(player.radius,Math.min(MAP_W-player.radius,pos.x));player.y=Math.max(player.radius,Math.min(MAP_H-player.radius,pos.y));}
+    if(pdx||pdy){const plen=Math.hypot(pdx,pdy);const nx=player.x+(pdx/plen)*player.speed*dt,ny=player.y+(pdy/plen)*player.speed*dt;const pos=resolveCollision(player,nx,ny);player.x=Math.max(player.radius,Math.min(MAP_W-player.radius,pos.x));player.y=Math.max(player.radius,Math.min(MAP_H-player.radius,pos.y));
+      // Footstep sound
+      if(!player._footTimer)player._footTimer=0;
+      player._footTimer-=dt;
+      if(player._footTimer<=0){playSound('footstep');player._footTimer=0.32;}
+    } else { player._footTimer=0; }
     // Aim angle
     const wmx=mouseX+cam.x,wmy=mouseY+cam.y;player.angle=Math.atan2(wmy-player.y,wmx-player.x);
     // Reload check
@@ -2124,8 +2228,6 @@ function update(dt){
     if(mouseDown){const w=player.inventory[player.activeSlot];if(w&&!w.isHeal){if(w.auto)tryShoot(player,player.angle);else if(mouseDown&&!player._lastMouseState)tryShoot(player,player.angle);}}
     player._lastMouseState=mouseDown;
   }
-  // Scope zoom
-  updateScope(dt);
   // Day/night — slowly gets darker over ~5 minutes
   if(gameRunning) dayTime=Math.min(1,dayTime+dt/300);
   // Grenade & melee timers
@@ -2141,6 +2243,9 @@ function update(dt){
   updateKillEffects(dt);
   updatePoison(dt);
   tickPoisonDamage(dt);
+  updateKillStreak(dt);
+  updateMines(dt);
+  updateSmoke(dt);
   // Spectate cam
   if(spectating){
     const t=spectateTargets[spectateIdx];
@@ -2152,6 +2257,13 @@ function update(dt){
     const dist=Math.hypot(player.x-serverStorm.centerX,player.y-serverStorm.centerY);
     if(dist>serverStorm.radius){matchStats.stormTime+=dt;if(matchStats.stormTime>10)checkTitleUnlock('stormchaser');}
     else matchStats.stormTime=0;
+    // Storm proximity rumble — louder as storm approaches
+    if(!player._stormRumbleTimer)player._stormRumbleTimer=0;
+    player._stormRumbleTimer-=dt;
+    if(player._stormRumbleTimer<=0){
+      const margin=serverStorm.radius-dist;
+      if(margin<400&&margin>0){player._stormRumbleTimer=Math.max(0.2,margin/400);playSound('stormproximity');}
+    }
   }
   // Challenge: survived minutes
   tickChallenge('survivedMinutes',dt/60);
@@ -2179,7 +2291,8 @@ function update(dt){
       Object.entries(remotePlayers).forEach(([id,rp])=>{
         if(!rp.alive||!b.alive) return;
         if(Math.hypot(b.x-rp.x,b.y-rp.y)<rp.radius+4){
-          b.alive=false;
+          // Pierce: crossbow doesn't die on first hit
+          if(!b.pierce)b.alive=false;
           if(b.splash) spawnExplosion(b.x,b.y);
           socket.emit('reportHit',{targetId:id,damage:b.damage,weaponKey:b.weaponKey});
           if(b.isPoison)applyPoison(id,5);
@@ -2389,6 +2502,8 @@ function render(){
   renderPoisonEffects();
   renderDeathAnims();
   renderKillEffects();
+  renderMines();
+  renderSmoke();
   // Weather (drawn in world space)
   renderWeather();
   ctx.restore();
@@ -2407,14 +2522,6 @@ function render(){
       }
       ctx.globalAlpha=1;
     }
-  }
-  // Scope vignette when zoomed
-  if(scopeZoom<0.8){
-    const vg=ctx.createRadialGradient(canvas.width/2,canvas.height/2,canvas.height*0.28,canvas.width/2,canvas.height/2,canvas.height*0.55);
-    vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.92)');
-    ctx.fillStyle=vg;ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.strokeStyle='rgba(0,255,231,0.3)';ctx.lineWidth=2;
-    ctx.beginPath();ctx.arc(canvas.width/2,canvas.height/2,canvas.height*0.28,0,Math.PI*2);ctx.stroke();
   }
   renderMinimap();
 }
