@@ -702,7 +702,7 @@ function updateFPS(ts){
 // settings loaded after game script starts
 
 // =====================================================
-const SERVER_URL = 'https://slimey-server.onrender.com/'; // <-- CHANGE THIS when deployed
+const SERVER_URL = 'https://slimey-server.onrender.com'; // <-- CHANGE THIS when deployed
 const FOREST_SERVERS = new Set(['official-na-west-1','official-eu-west-2','official-asia-1','custom-slimewars','custom-nostorm','official-na-west-2','official-eu-central-1','official-sa-east-1','ranked-eu-west-1','custom-bigteams']);
 const SNOW_SERVERS = new Set(['official-na-east-2','official-eu-west-1','ranked-na-east-1','custom-scrim','custom-nostorm2','official-na-east-3','official-asia-2','official-oce-1','ranked-na-west-1','custom-ranked2']);
 
@@ -914,7 +914,7 @@ socket.on('gameStarting', ({ players, mapSeed: seed }) => {
 
 // ===================== IN-GAME NETWORK =====================
 // Storm (server-authoritative)
-let serverStorm = {centerX:5000,centerY:5000,radius:5000,targetRadius:5000,phase:1,phaseTimer:0,phaseDuration:60,damagePerSec:5};
+let serverStorm = { centerX:5000,centerY:5000,radius:6800,targetRadius:8000,phase:1,phaseTimer:0,phaseDuration:60,damagePerSec:5 };
 
 socket.on('stormUpdate', (data) => {
   serverStorm = data;
@@ -938,13 +938,14 @@ socket.on('stormDamage', ({ amount, hp }) => {
 // Remote players
 socket.on('remotePlayerUpdate', ({ id, x, y, hp, shield, angle, activeWeapon, skin }) => {
   if(id === mySocketId) return;
+  // Resolve server position out of any wall so remote players never appear inside buildings
+  const safe = nudgeOutOfWall(x, y);
   if (!remotePlayers[id]) {
-    // Player joined mid-match or wasn't in initial sync — create them
-    remotePlayers[id] = { x, y, targetX: x, targetY: y, hp, shield: shield||0, name: '???', color: '#e74c3c', alive: hp>0, angle: angle||0, radius: 14, skin: skin||null };
+    remotePlayers[id] = { x: safe.x, y: safe.y, targetX: safe.x, targetY: safe.y, hp, shield: shield||0, name: '???', color: '#e74c3c', alive: hp>0, angle: angle||0, radius: 14, skin: skin||null };
     return;
   }
   const rp = remotePlayers[id];
-  rp.targetX = x; rp.targetY = y;
+  rp.targetX = safe.x; rp.targetY = safe.y;
   rp.hp = hp; rp.shield = shield||0;
   rp.angle = angle||0;
   rp.activeWeapon = activeWeapon;
@@ -1222,7 +1223,7 @@ else if(type==='reload_pistol'){[400,600].forEach((f,i)=>{const o=ac.createOscil
 else if(type==='stormproximity'){const o=ac.createOscillator();o.type='sine';o.connect(g);o.frequency.value=40;g.gain.setValueAtTime(0,ac.currentTime);g.gain.linearRampToValueAtTime(0.1,ac.currentTime+0.2);g.gain.linearRampToValueAtTime(0,ac.currentTime+0.5);o.start();o.stop(ac.currentTime+0.5);}}catch(e){}}
 
 // ---- CONSTANTS ----
-const MAP_W=3200,MAP_H=3200;
+const MAP_W=3500,MAP_H=3500;
 const WEAPONS={pistol:{name:'Pistol',icon:'🔫',color:'#aaa',damage:25,fireRate:400,ammo:12,maxAmmo:12,speed:900,spread:0.05,reloadTime:1200,range:600,auto:false,soundType:'shoot'},ar:{name:'Assault Rifle',icon:'⚙️',color:'#5d8a4e',damage:20,fireRate:150,ammo:30,maxAmmo:30,speed:1000,spread:0.08,reloadTime:2000,range:700,auto:true,soundType:'shoot'},shotgun:{name:'Shotgun',icon:'💥',color:'#c0392b',damage:18,fireRate:800,ammo:6,maxAmmo:6,speed:700,spread:0.25,pellets:6,reloadTime:2500,range:350,auto:false,soundType:'shotgun'},smg:{name:'SMG',icon:'🔩',color:'#7f8c8d',damage:14,fireRate:80,ammo:35,maxAmmo:35,speed:900,spread:0.15,reloadTime:1500,range:450,auto:true,soundType:'shoot'},rocket:{name:'Rocket',icon:'🚀',color:'#e67e22',damage:80,fireRate:2000,ammo:3,maxAmmo:3,speed:400,spread:0.02,reloadTime:3500,range:900,auto:false,soundType:'shoot',splash:60},minigun:{name:'Minigun',icon:'🌀',color:'#e74c3c',damage:12,fireRate:60,ammo:100,maxAmmo:100,speed:900,spread:0.2,reloadTime:4000,range:500,auto:true,soundType:'shoot'},crossbow:{name:'Crossbow',icon:'🏹',color:'#8B6914',damage:60,fireRate:800,ammo:6,maxAmmo:6,speed:700,spread:0,reloadTime:2000,range:1000,auto:false,soundType:'shoot',pierce:true},grenade:{name:'Grenade',icon:'💣',color:'#2ecc71',damage:70,fireRate:1200,ammo:3,maxAmmo:3,speed:500,spread:0.05,reloadTime:2000,range:600,auto:false,soundType:'shoot',isGrenade:true,splash:90},landmine:{name:'Landmine',icon:'💀',color:'#e74c3c',damage:80,fireRate:1000,ammo:2,maxAmmo:2,speed:0,spread:0,reloadTime:2000,range:0,auto:false,soundType:'reload',isLandmine:true},smokegrenade:{name:'Smoke Grenade',icon:'💨',color:'#95a5a6',damage:0,fireRate:1000,ammo:2,maxAmmo:2,speed:400,spread:0.05,reloadTime:1800,range:500,auto:false,soundType:'reload',isSmoke:true},knife:{name:'Knife',icon:'🔪',color:'#ecf0f1',damage:50,fireRate:600,ammo:1,maxAmmo:1,speed:0,spread:0,reloadTime:0,range:55,auto:false,soundType:'hit',isMelee:true},bat:{name:'Bat',icon:'🏏',color:'#8B6914',damage:35,fireRate:500,ammo:1,maxAmmo:1,speed:0,spread:0,reloadTime:0,range:65,auto:false,soundType:'hit',isMelee:true},flamethrower:{name:'Flamethrower',icon:'🔥',color:'#e74c3c',damage:8,fireRate:80,ammo:60,maxAmmo:60,speed:280,spread:0.4,reloadTime:3000,range:180,auto:true,soundType:'shoot',isFlame:true},boomerang:{name:'Boomerang',icon:'🪃',color:'#e67e22',damage:30,fireRate:1000,ammo:2,maxAmmo:2,speed:420,spread:0.02,reloadTime:2000,range:500,auto:false,soundType:'shoot',isBoomerang:true},deployshield:{name:'Deploy Shield',icon:'🛡️',color:'#3498db',damage:0,fireRate:1500,ammo:2,maxAmmo:2,speed:0,spread:0,reloadTime:2500,range:0,auto:false,soundType:'reload',isDeployShield:true},poisondart:{name:'Poison Dart',icon:'☠️',color:'#27ae60',damage:10,fireRate:600,ammo:8,maxAmmo:8,speed:550,spread:0.03,reloadTime:1800,range:700,auto:false,soundType:'shoot',isPoison:true},
 // ---- NEW WEAPONS ----
 dualpistols:{name:'Dual Pistols',icon:'🔫',color:'#c0c0c0',damage:18,fireRate:200,ammo:24,maxAmmo:24,speed:920,spread:0.07,reloadTime:1400,range:580,auto:false,soundType:'shoot',pellets:2},
@@ -1507,7 +1508,8 @@ function syncRemotePlayers(playersMap) {
   remotePlayers = {};
   Object.entries(playersMap).forEach(([id, p]) => {
     if (id === mySocketId) return; // skip self
-    remotePlayers[id] = { x: p.x, y: p.y, targetX: p.x, targetY: p.y, hp: p.hp, shield: p.shield||0, name: p.name, color: p.color||'#e74c3c', alive: p.alive, angle: 0, radius: 14, skin: p.skin||null };
+    const safe = nudgeOutOfWall(p.x||MAP_W/2, p.y||MAP_H/2);
+    remotePlayers[id] = { x: safe.x, y: safe.y, targetX: safe.x, targetY: safe.y, hp: p.hp||100, shield: p.shield||0, name: p.name||'???', color: p.color||'#e74c3c', alive: p.alive!==false, angle: 0, radius: 14, skin: p.skin||null };
   });
 }
 
@@ -1675,6 +1677,287 @@ canvas.addEventListener('click',e=>{
   const w=player.inventory[player.activeSlot];
   if(w&&!w.isHeal&&!w.auto){const wx=e.clientX+cam.x,wy=e.clientY+cam.y;const angle=Math.atan2(wy-player.y,wx-player.x);tryShoot(player,angle);}
 });
+
+// =====================================================
+// GAMEPAD SUPPORT (Xbox / PlayStation controllers)
+// =====================================================
+const gamepad = {
+  connected: false,
+  index: null,
+  // Virtual aim position driven by right stick
+  aimX: null,
+  aimY: null,
+  // Aim angle accumulator for right-stick aiming
+  aimAngle: 0,
+  aimDist: 120, // pixels from player centre crosshair floats
+  // Button state tracking (for edge detection)
+  _prev: {},
+  _cur: {},
+  // Auto-fire state
+  _shootHeld: false,
+  // Cooldown timers
+  _healCd: 0,
+  _pickupCd: 0,
+  _reloadCd: 0,
+  _dropCd: 0,
+  _grenadeCd: 0,
+  _meleeCd: 0,
+  _tabCd: 0,
+  _slotCd: 0,
+};
+
+// Button mappings (standard gamepad layout)
+const GP_BTN = {
+  A: 0,          // Xbox A / PS Cross     → shoot (single-fire / confirm)
+  B: 1,          // Xbox B / PS Circle    → melee / throw grenade
+  X: 2,          // Xbox X / PS Square    → reload
+  Y: 3,          // Xbox Y / PS Triangle  → pick up / open crate
+  LB: 4,         // Left bumper           → previous slot
+  RB: 5,         // Right bumper          → next slot
+  LT: 6,         // Left trigger (axis)   → heal
+  RT: 7,         // Right trigger         → shoot (hold for auto)
+  SELECT: 8,     // Select / Share        → (unused)
+  START: 9,      // Start / Options       → (unused)
+  L3: 10,        // Left stick click      → drop item
+  R3: 11,        // Right stick click     → (unused)
+  UP: 12,        // D-pad up              → slot 1
+  DOWN: 13,      // D-pad down            → slot 3
+  LEFT: 14,      // D-pad left            → slot 4
+  RIGHT: 15,     // D-pad right           → slot 5
+};
+
+window.addEventListener('gamepadconnected', e => {
+  gamepad.connected = true;
+  gamepad.index = e.gamepad.index;
+  showGamepadNotification('🎮 Controller connected: ' + (e.gamepad.id.includes('Xbox') ? 'Xbox' : e.gamepad.id.includes('PlayStation')||e.gamepad.id.includes('DualSense')||e.gamepad.id.includes('DualShock') ? 'PlayStation' : 'Gamepad'));
+});
+
+window.addEventListener('gamepaddisconnected', e => {
+  if (e.gamepad.index === gamepad.index) {
+    gamepad.connected = false;
+    gamepad.index = null;
+    showGamepadNotification('🎮 Controller disconnected');
+  }
+});
+
+function showGamepadNotification(msg) {
+  let el = document.getElementById('gamepadNotif');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'gamepadNotif';
+    el.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#00ffe7;font-family:Bangers,cursive;font-size:20px;letter-spacing:2px;padding:10px 24px;border-radius:6px;border:1px solid rgba(0,255,231,0.4);z-index:9999;transition:opacity 0.5s;pointer-events:none;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = '0'; }, 3000);
+}
+
+function gpBtn(gp, idx) {
+  const b = gp.buttons[idx];
+  return b ? (typeof b === 'object' ? b.pressed || b.value > 0.5 : b > 0.5) : false;
+}
+
+function gpAxis(gp, idx) {
+  return gp.axes[idx] || 0;
+}
+
+function applyDeadzone(val, dz = 0.15) {
+  if (Math.abs(val) < dz) return 0;
+  return (val - Math.sign(val) * dz) / (1 - dz);
+}
+
+function pollGamepad(dt) {
+  if (!gamepad.connected) return;
+  let gamepads = [];
+  try { gamepads = navigator.getGamepads ? navigator.getGamepads() : []; }
+  catch(e) { return; } // blocked by permissions policy (e.g. iframe sandbox)
+  const gp = gamepads[gamepad.index];
+  if (!gp) return;
+
+  // ── Snapshot button states ──────────────────────────────
+  Object.values(GP_BTN).forEach(i => {
+    gamepad._prev[i] = gamepad._cur[i] || false;
+    gamepad._cur[i] = gpBtn(gp, i);
+  });
+  const pressed = i => gamepad._cur[i] && !gamepad._prev[i]; // rising edge
+
+  // ── Cooldown timers ─────────────────────────────────────
+  gamepad._healCd    = Math.max(0, (gamepad._healCd    || 0) - dt);
+  gamepad._pickupCd  = Math.max(0, (gamepad._pickupCd  || 0) - dt);
+  gamepad._reloadCd  = Math.max(0, (gamepad._reloadCd  || 0) - dt);
+  gamepad._dropCd    = Math.max(0, (gamepad._dropCd    || 0) - dt);
+  gamepad._grenadeCd = Math.max(0, (gamepad._grenadeCd || 0) - dt);
+  gamepad._meleeCd   = Math.max(0, (gamepad._meleeCd   || 0) - dt);
+  gamepad._tabCd     = Math.max(0, (gamepad._tabCd     || 0) - dt);
+  gamepad._slotCd    = Math.max(0, (gamepad._slotCd    || 0) - dt);
+
+  // ── LEFT STICK → movement (inject into keys object) ─────
+  const lx = applyDeadzone(gpAxis(gp, 0));
+  const ly = applyDeadzone(gpAxis(gp, 1));
+  // Use synthetic keys so existing movement code picks it up transparently
+  keys['_gpLeft']  = lx < -0.2;
+  keys['_gpRight'] = lx >  0.2;
+  keys['_gpUp']    = ly < -0.2;
+  keys['_gpDown']  = ly >  0.2;
+
+  // ── RIGHT STICK → aim ────────────────────────────────────
+  const rx = applyDeadzone(gpAxis(gp, 2));
+  const ry = applyDeadzone(gpAxis(gp, 3));
+  if (Math.hypot(rx, ry) > 0.15) {
+    gamepad.aimAngle = Math.atan2(ry, rx);
+  }
+  // Always expose a virtual mouse position for aiming
+  if (player && player.alive && gameRunning) {
+    const sx = player.x - cam.x;
+    const sy = player.y - cam.y;
+    gamepad.aimX = sx + Math.cos(gamepad.aimAngle) * gamepad.aimDist;
+    gamepad.aimY = sy + Math.sin(gamepad.aimAngle) * gamepad.aimDist;
+    // Override mouseX/mouseY when controller is active
+    mouseX = gamepad.aimX;
+    mouseY = gamepad.aimY;
+  }
+
+  if (!gameRunning || !player || !player.alive) return;
+
+  // ── RIGHT TRIGGER (RT) → shoot (hold for auto, tap for semi) ──
+  const rtHeld = gpBtn(gp, GP_BTN.RT);
+  if (rtHeld) {
+    const w = player.inventory[player.activeSlot];
+    if (w && !w.isHeal) {
+      if (w.auto) {
+        mouseDown = true;
+        tryShoot(player, player.angle);
+      } else if (!gamepad._shootHeld) {
+        tryShoot(player, player.angle);
+      }
+    }
+    gamepad._shootHeld = true;
+  } else {
+    gamepad._shootHeld = false;
+    // Only clear mouseDown if gamepad was driving it
+    if (mouseDown && !gamepad._mouseBtnHeld) mouseDown = false;
+  }
+
+  // ── A button → single-fire / confirm ────────────────────
+  if (pressed(GP_BTN.A)) {
+    const w = player.inventory[player.activeSlot];
+    if (w && !w.isHeal && !w.auto) tryShoot(player, player.angle);
+  }
+
+  // ── B button → grenade ───────────────────────────────────
+  if (pressed(GP_BTN.B) && gamepad._grenadeCd <= 0) {
+    throwGrenade();
+    gamepad._grenadeCd = 0.4;
+  }
+
+  // ── X button → reload ────────────────────────────────────
+  if (pressed(GP_BTN.X) && gamepad._reloadCd <= 0) {
+    reloadWeapon(player);
+    gamepad._reloadCd = 0.5;
+  }
+
+  // ── Y button → pick up / open crate ─────────────────────
+  if (pressed(GP_BTN.Y) && gamepad._pickupCd <= 0) {
+    tryPickup();
+    tryOpenCrate();
+    gamepad._pickupCd = 0.4;
+  }
+
+  // ── LT (button 6) → heal ─────────────────────────────────
+  if (pressed(GP_BTN.LT) && gamepad._healCd <= 0) {
+    useHeal();
+    gamepad._healCd = 0.6;
+  }
+
+  // ── L3 (left stick click) → drop item ───────────────────
+  if (pressed(GP_BTN.L3) && gamepad._dropCd <= 0) {
+    dropItem();
+    gamepad._dropCd = 0.6;
+  }
+
+  // ── LB / RB → cycle inventory slots ─────────────────────
+  if (pressed(GP_BTN.LB) && gamepad._slotCd <= 0) {
+    player.activeSlot = (player.activeSlot + 4) % 5;
+    gamepad._slotCd = 0.18;
+  }
+  if (pressed(GP_BTN.RB) && gamepad._slotCd <= 0) {
+    player.activeSlot = (player.activeSlot + 1) % 5;
+    gamepad._slotCd = 0.18;
+  }
+
+  // ── D-pad → quick slot select ────────────────────────────
+  if (pressed(GP_BTN.UP))    player.activeSlot = 0;
+  if (pressed(GP_BTN.DOWN))  player.activeSlot = 2;
+  if (pressed(GP_BTN.LEFT))  player.activeSlot = 3;
+  if (pressed(GP_BTN.RIGHT)) player.activeSlot = 4;
+}
+
+// Patch movement update() to also read gamepad synthetic keys
+// We hook into the existing keys[] lookup by aliasing them
+const _origKeyLookup = (code) => keys[code];
+// Override keys[] proxy so _gpLeft etc feed into movement
+const _gpKeyMap = {
+  [S.keys.left]:  '_gpLeft',
+  [S.keys.right]: '_gpRight',
+  [S.keys.up]:    '_gpUp',
+  [S.keys.down]:  '_gpDown',
+};
+// Patch: intercept movement reads by overriding the check in update()
+// We do this by augmenting the keys object with getter-based fallbacks
+Object.defineProperties(keys, {
+  _getWithGP: { value: function(code) {
+    return this[code] || (this[_gpKeyMap[code]] || false);
+  }, writable: true }
+});
+
+// Draw gamepad crosshair overlay when controller active
+function renderGamepadCrosshair() {
+  if (!gamepad.connected || !gameRunning || !player || !player.alive) return;
+  const cx = gamepad.aimX !== null ? gamepad.aimX : canvas.width / 2;
+  const cy = gamepad.aimY !== null ? gamepad.aimY : canvas.height / 2;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 6;
+  ctx.shadowColor = '#00ffe7';
+  const s = 10;
+  ctx.beginPath();
+  ctx.moveTo(cx - s, cy); ctx.lineTo(cx + s, cy);
+  ctx.moveTo(cx, cy - s); ctx.lineTo(cx, cy + s);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,255,231,0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Show controller button legend HUD in-game
+(function injectGamepadHUD() {
+  const hud = document.createElement('div');
+  hud.id = 'gamepadHud';
+  hud.style.cssText = 'position:fixed;bottom:82px;right:290px;background:rgba(0,0,0,0.7);border:1px solid rgba(0,255,231,0.2);border-radius:6px;padding:8px 12px;font-family:Share Tech Mono,monospace;font-size:10px;color:#666;line-height:1.7;pointer-events:none;display:none;z-index:100;';
+  hud.innerHTML = `<div style="color:#00ffe7;font-size:11px;margin-bottom:4px;letter-spacing:1px;">🎮 CONTROLLER</div>
+    <div>LS <span style="color:#aaa">Move</span></div>
+    <div>RS <span style="color:#aaa">Aim</span></div>
+    <div>RT <span style="color:#aaa">Shoot</span></div>
+    <div>LT <span style="color:#aaa">Heal</span></div>
+    <div>RB/LB <span style="color:#aaa">Cycle slot</span></div>
+    <div>X <span style="color:#aaa">Reload</span></div>
+    <div>Y <span style="color:#aaa">Pick up</span></div>
+    <div>B <span style="color:#aaa">Grenade</span></div>
+    <div>L3 <span style="color:#aaa">Drop item</span></div>
+    <div>D-pad <span style="color:#aaa">Quick slots</span></div>`;
+  document.body.appendChild(hud);
+
+  // Show when connected and in game
+  window.addEventListener('gamepadconnected', () => { hud.style.display = 'block'; });
+  window.addEventListener('gamepaddisconnected', () => { hud.style.display = 'none'; });
+})();
+// END GAMEPAD SUPPORT
 
 // Inventory
 // ---- GRENADE ----
@@ -2196,8 +2479,11 @@ function startOnlineMatch(playersMap, seed) {
   else generateCity(seed);
   spawnGroundItems(seed);
 
-  // Override server spawn with a safe road position (server coords may be inside buildings)
-  const safeSpot = findSafeSpawn(MAP_W/2, MAP_H/2, 0);
+  // Use socket ID hash so each player spawns at a different road crossing
+  const idHash = mySocketId ? [...mySocketId].reduce((a,c)=>a+c.charCodeAt(0),0) : 0;
+  const spawnOffX = ((idHash * 137) % MAP_W);
+  const spawnOffY = ((idHash * 251) % MAP_H);
+  const safeSpot = findSafeSpawn(spawnOffX, spawnOffY, 0);
   player.x = safeSpot.x;
   player.y = safeSpot.y;
   player.hp=100;player.shield=0;player.inventory=[null,null,null,null,null];
@@ -2230,6 +2516,24 @@ function startOnlineMatch(playersMap, seed) {
 }
 
 // Returns a point guaranteed to be on a road intersection (never inside a building)
+// Push a coordinate out of any solid object by scanning outward in a spiral
+function nudgeOutOfWall(x, y, r=16) {
+  if (!isSolidAt(x, y, r)) return {x, y};
+  // Try expanding rings of candidate positions
+  for (let dist = 20; dist <= 400; dist += 20) {
+    const steps = Math.max(8, Math.floor(dist * 0.5));
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * Math.PI * 2;
+      const nx = x + Math.cos(angle) * dist;
+      const ny = y + Math.sin(angle) * dist;
+      if (nx > r && nx < MAP_W - r && ny > r && ny < MAP_H - r && !isSolidAt(nx, ny, r)) {
+        return {x: nx, y: ny};
+      }
+    }
+  }
+  return {x, y}; // fallback: return original (shouldn't happen)
+}
+
 function findSafeSpawn(nearX, nearY, minDist=0) {
   // For forest maps, use clearing centres as spawn candidates
   if(currentMapType==='forest'){
@@ -2290,7 +2594,7 @@ function startSoloGame() {
   matchStats={firstKillDone:false,stormTime:0,inStorm:false,noHit:true,grenadeKill:false,sniperKills:0,meleeKills:0,poisonKill:false,flameKill:false};
   document.getElementById('challengeHud').style.display='block';
   updateChallengeHUD();
-  serverStorm={centerX:MAP_W/2,centerY:MAP_H/2,radius:MAP_W*0.96,targetRadius:MAP_W*0.76,phase:1,phaseTimer:0,phaseDuration:60,damagePerSec:5};
+  serverStorm={centerX:MAP_W/2,centerY:MAP_H/2,radius:MAP_W*1.06,targetRadius:MAP_W*0.76,phase:1,phaseTimer:0,phaseDuration:60,damagePerSec:5};
   gameOver=false;gameRunning=true;
   updateCamera();
   // Local solo storm tick
@@ -2346,8 +2650,8 @@ function update(dt){
   // Player movement
   if(player.alive){
     let pdx=0,pdy=0;
-    if(keys[S.keys.up]||keys['ArrowUp'])pdy-=1;if(keys[S.keys.down]||keys['ArrowDown'])pdy+=1;
-    if(keys[S.keys.left]||keys['ArrowLeft'])pdx-=1;if(keys[S.keys.right]||keys['ArrowRight'])pdx+=1;
+    if(keys[S.keys.up]||keys['ArrowUp']||keys['_gpUp'])pdy-=1;if(keys[S.keys.down]||keys['ArrowDown']||keys['_gpDown'])pdy+=1;
+    if(keys[S.keys.left]||keys['ArrowLeft']||keys['_gpLeft'])pdx-=1;if(keys[S.keys.right]||keys['ArrowRight']||keys['_gpRight'])pdx+=1;
     if(pdx||pdy){const plen=Math.hypot(pdx,pdy);const nx=player.x+(pdx/plen)*player.speed*dt,ny=player.y+(pdy/plen)*player.speed*dt;const pos=resolveCollision(player,nx,ny);player.x=Math.max(player.radius,Math.min(MAP_W-player.radius,pos.x));player.y=Math.max(player.radius,Math.min(MAP_H-player.radius,pos.y));
       // Footstep sound
       if(!player._footTimer)player._footTimer=0;
@@ -2664,6 +2968,7 @@ function render(){
     }
   }
   renderMinimap();
+  renderGamepadCrosshair();
 }
 
 function renderMinimap(){
@@ -2696,6 +3001,7 @@ function renderMinimap(){
 // ===================== GAME LOOP =====================
 function gameLoop(ts){
   const dt=Math.min((ts-lastTime)/1000,0.05);lastTime=ts;
+  pollGamepad(dt);
   if(gameRunning&&!gameOver){update(dt);render();}
   updateFPS(ts);
   requestAnimationFrame(gameLoop);
