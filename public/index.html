@@ -1100,7 +1100,7 @@ function showServerBrowser() {
   socket.emit('getServerList');
 }
 
-// New custom-map servers — simulate a real lobby + game locally
+// These servers are client-side only — no backend needed
 const LOCAL_ONLY_SERVERS = new Set([
   'desert-na-east-1','desert-na-west-1','desert-eu-west-1','desert-asia-1','desert-sa-east-1',
   'fruit-na-east-1','fruit-na-west-1','fruit-eu-west-1','fruit-asia-1','fruit-sa-east-1',
@@ -1108,58 +1108,15 @@ const LOCAL_ONLY_SERVERS = new Set([
   'zombie-na-east-1','zombie-na-west-1','zombie-eu-west-1','zombie-asia-1','zombie-sa-east-1',
 ]);
 
-const MAP_TYPE_FOR_SERVER = {
-  'desert-na-east-1':'desert','desert-na-west-1':'desert','desert-eu-west-1':'desert','desert-asia-1':'desert','desert-sa-east-1':'desert',
-  'fruit-na-east-1':'fruit','fruit-na-west-1':'fruit','fruit-eu-west-1':'fruit','fruit-asia-1':'fruit','fruit-sa-east-1':'fruit',
-  'candy-na-east-1':'candy','candy-na-west-1':'candy','candy-eu-west-1':'candy','candy-asia-1':'candy','candy-sa-east-1':'candy',
-  'zombie-na-east-1':'zombie','zombie-na-west-1':'zombie','zombie-eu-west-1':'zombie','zombie-asia-1':'zombie','zombie-sa-east-1':'zombie',
-};
-
 function joinServer(lobbyId, name, region) {
-  showConnecting();
   currentServer = { id: lobbyId, name, region };
-  document.getElementById('lobbyTitle').textContent = name;
-  document.getElementById('lRegion').textContent = region;
-
   if (LOCAL_ONLY_SERVERS.has(lobbyId)) {
-    // Simulate connecting, then go straight into lobby, then auto-start
-    const steps = document.querySelectorAll('.conn-step');
-    let s = 0;
-    function nextStep() {
-      if (s > 0) { steps[s-1].classList.remove('active'); steps[s-1].classList.add('done'); steps[s-1].querySelector('.step-icon').textContent = '\u2713'; }
-      if (s < steps.length - 1) { steps[s].classList.add('active'); s++; setTimeout(nextStep, 350 + Math.random()*200); }
-      else {
-        steps[s].classList.add('active');
-        setTimeout(() => {
-          // Fake a joinedLobby response
-          myLobbyId = lobbyId;
-          mySocketId = mySocketId || 'local-' + Math.random().toString(36).slice(2);
-          lobbyPlayersMap = {};
-          lobbyPlayersMap[mySocketId] = { id: mySocketId, name: playerUsername, ready: false, hp: 100, alive: true };
-          isReady = false;
-          hideConnecting();
-          showScreen('lobbyScreen');
-          renderLobbyPlayers();
-          document.getElementById('readyBtn').textContent = 'READY UP';
-          document.getElementById('readyBtn').classList.remove('is-ready');
-          document.getElementById('lobbyCountdown').classList.remove('visible');
-
-          // Update lobby info panel to show correct map
-          const mapLabels = {desert:'DESERT DUNES', fruit:'FRUIT CITY', candy:'CANDY KINGDOM', zombie:'SLIME CITY (RUINED)'};
-          const mt = MAP_TYPE_FOR_SERVER[lobbyId] || 'city';
-          const infoVals = document.querySelectorAll('.linfo-val');
-          if (infoVals[0]) infoVals[0].textContent = (mapLabels[mt] || 'SLIME CITY');
-          if (mt === 'zombie') {
-            addLobbyMessage(null, '\u26a0\ufe0f WARNING: This server is overrun with ZOMBIE BOTS (20 dmg each)!', 'system');
-          }
-        }, 400);
-      }
-    }
-    setTimeout(nextStep, 100);
+    startLocalCustomGame(lobbyId);
     return;
   }
-
-  // Real backend servers — normal flow
+  showConnecting();
+  document.getElementById('lobbyTitle').textContent = name;
+  document.getElementById('lRegion').textContent = region;
   const steps = document.querySelectorAll('.conn-step');
   let s = 0;
   function nextStep() {
@@ -1168,6 +1125,45 @@ function joinServer(lobbyId, name, region) {
     else { steps[s].classList.add('active'); s++; socket.emit('joinLobby', { lobbyId, playerName: playerUsername }); }
   }
   setTimeout(nextStep, 100);
+}
+
+function startLocalCustomGame(lobbyId) {
+  const mapType = DESERT_SERVERS.has(lobbyId) ? 'desert'
+    : FRUIT_SERVERS.has(lobbyId)  ? 'fruit'
+    : CANDY_SERVERS.has(lobbyId)  ? 'candy'
+    : ZOMBIE_SERVERS.has(lobbyId) ? 'zombie'
+    : 'city';
+  currentMapType = mapType;
+  myLobbyId = null;
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('gameContainer').classList.add('active');
+  document.getElementById('pingDisplay').style.display = 'none';
+  const seed = Math.floor(Math.random() * 99999);
+  generateCity(seed);
+  spawnGroundItems(seed + 1);
+  const safeSpot = findSafeSpawn(MAP_W / 2, MAP_H / 2, 0);
+  player.x = safeSpot.x; player.y = safeSpot.y;
+  player.hp = 100; player.shield = 0;
+  player.inventory = [null, null, null, null, null];
+  player.alive = true; player.score = 0; player.kills = [];
+  player.reloading = false; player.name = playerUsername;
+  document.getElementById('playerNameHud').textContent = '\ud83d\udfe2 ' + playerUsername;
+  initPlayerInventory();
+  remotePlayers = {}; bullets = []; particles = []; floatingTexts = []; grenades = [];
+  dayTime = 0; scopeZoom = 1; lootCrates = []; weatherParticles = [];
+  weatherType = mapType === 'candy' ? 'candy' : 'none';
+  boomerangs = []; firePatches = []; deployedShields = []; deathAnims = []; killEffects = [];
+  poisonedEntities.clear(); placedMines = []; smokeZones = []; killStreak = 0; killStreakTimer = 0;
+  zombieBots = []; zombieSpawnTimer = 0;
+  if (mapType === 'zombie') { for (let i = 0; i < 8; i++) setTimeout(() => spawnZombieBot(), i * 400); }
+  spectating = false; document.getElementById('spectateBar').style.display = 'none';
+  matchStats = { firstKillDone:false,stormTime:0,inStorm:false,noHit:true,grenadeKill:false,sniperKills:0,meleeKills:0,poisonKill:false,flameKill:false };
+  document.getElementById('challengeHud').style.display = 'block';
+  updateChallengeHUD();
+  serverStorm = { centerX:MAP_W/2,centerY:MAP_H/2,radius:MAP_W*1.06,targetRadius:MAP_W*0.76,phase:1,phaseTimer:0,phaseDuration:60,damagePerSec:5 };
+  gameOver = false; gameRunning = true;
+  updateCamera();
+  soloStormTick();
 }
 
 let currentServer = null;
@@ -1195,7 +1191,7 @@ function showConnError(msg) {
 }
 
 function leaveLobby() {
-  if (!LOCAL_ONLY_SERVERS.has(myLobbyId)) socket.emit('leaveLobby');
+  socket.emit('leaveLobby');
   myLobbyId = null;
   lobbyPlayersMap = {};
   showServerBrowser();
@@ -1203,33 +1199,10 @@ function leaveLobby() {
 
 function toggleReady() {
   isReady = !isReady;
+  socket.emit('setReady', { ready: isReady });
   const btn = document.getElementById('readyBtn');
   btn.textContent = isReady ? '✓ READY!' : 'READY UP';
   btn.classList.toggle('is-ready', isReady);
-
-  if (LOCAL_ONLY_SERVERS.has(myLobbyId)) {
-    if (isReady) {
-      let count = 5;
-      const cdEl = document.getElementById('lobbyCountdown');
-      const numEl = document.getElementById('countdownNum');
-      cdEl.classList.add('visible');
-      numEl.textContent = count;
-      const iv = setInterval(() => {
-        count--;
-        if (count > 0) { numEl.textContent = count; }
-        else {
-          clearInterval(iv);
-          cdEl.classList.remove('visible');
-          const seed = Math.floor(Math.random() * 99999);
-          currentMapType = MAP_TYPE_FOR_SERVER[myLobbyId] || 'city';
-          startOnlineMatch({ [mySocketId]: { id: mySocketId, name: playerUsername, ready: true, hp: 100, alive: true } }, seed);
-        }
-      }, 1000);
-    }
-    return;
-  }
-
-  socket.emit('setReady', { ready: isReady });
 }
 
 function sendLobbyChat() {
