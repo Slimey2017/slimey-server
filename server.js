@@ -22,10 +22,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ===================== CONSTANTS =====================
-const MAX_PLAYERS_PER_LOBBY = 20;
+const MAX_PLAYERS_PER_LOBBY = 35;
 const LOBBY_START_COUNTDOWN = 5; // seconds after enough players ready
 const MIN_READY_TO_START = 3;
-const MAP_W = 3200, MAP_H = 3200;
+const MAP_W = 3500, MAP_H = 3500;
 
 // Storm config (server is authoritative)
 const STORM_CONFIG = {
@@ -47,16 +47,39 @@ const lobbies = {};
 
 // Pre-defined server rooms (matching client SERVER_DEFS)
 const SERVER_ROOMS = [
-  { id: 'official-na-east-1', name: 'Official NA-East #1', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-  { id: 'official-na-east-2', name: 'Official NA-East #2', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-  { id: 'official-na-west-1', name: 'Official NA-West #1', region: 'NA-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-  { id: 'official-eu-west-1', name: 'Official EU-West #1', region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-  { id: 'official-eu-west-2', name: 'Official EU-West #2', region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-  { id: 'official-asia-1',    name: 'Official Asia-Pacific', region: 'ASIA',  maxP: MAX_PLAYERS_PER_LOBBY },
-  { id: 'ranked-na-east-1',   name: 'Ranked Competitive',  region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-  { id: 'custom-slimewars',   name: 'SLIME WARS Custom #4', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-  { id: 'custom-scrim',       name: 'Pro Scrim Practice',  region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-  { id: 'custom-nostorm',     name: 'Chill Zone No-Storm', region: 'NA-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
+    { id: 'official-na-east-1', name: 'Official NA-East #1', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
+    { id: 'official-na-east-2', name: 'Official NA-East #2', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
+    { id: 'official-na-west-1', name: 'Official NA-West #1', region: 'NA-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
+    { id: 'official-eu-west-1', name: 'Official EU-West #1', region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
+    { id: 'official-eu-west-2', name: 'Official EU-West #2', region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
+    { id: 'official-asia-1',    name: 'Official Asia-Pacific', region: 'ASIA',  maxP: MAX_PLAYERS_PER_LOBBY },
+    { id: 'ranked-na-east-1',   name: 'Ranked Competitive',  region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
+    { id: 'custom-slimewars',   name: 'SLIME WARS Custom #4', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
+    { id: 'custom-scrim',       name: 'Pro Scrim Practice',  region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
+    { id: 'custom-nostorm',     name: 'Chill Zone No-Storm', region: 'NA-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
+    {id:'custom-nostorm',name:'No Storm (Forest)',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'custom-nostorm2',name:'No Storm (Snow)',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'custom-bigteams',name:'Big Teams Forest',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'desert-na-east-1',name:'Desert Dunes NA East',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'desert-na-west-1',name:'Desert Dunes NA West',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'desert-eu-west-1',name:'Desert Dunes EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'desert-asia-1',name:'Desert Dunes Asia',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'desert-sa-east-1',name:'Desert Dunes SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'fruit-na-east-1',name:'Fruit City NA East',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'fruit-na-west-1',name:'Fruit City NA West',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'fruit-eu-west-1',name:'Fruit City EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'fruit-asia-1',name:'Fruit City Asia',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'fruit-sa-east-1',name:'Fruit City SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'candy-na-east-1',name:'Candy Kingdom NA East',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'candy-na-west-1',name:'Candy Kingdom NA West',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'candy-eu-west-1',name:'Candy Kingdom EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'candy-asia-1',name:'Candy Kingdom Asia',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'candy-sa-east-1',name:'Candy Kingdom SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'zombie-na-east-1',name:'Slime City Ruins NA East',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'zombie-na-west-1',name:'Slime City Ruins NA West',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'zombie-eu-west-1',name:'Slime City Ruins EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'zombie-asia-1',name:'Slime City Ruins Asia',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'zombie-sa-east-1',name:'Slime City Ruins SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
 ];
 
 // Init all lobby slots
