@@ -705,6 +705,11 @@ function updateFPS(ts){
 const SERVER_URL = 'https://slimey-server.onrender.com'; // <-- CHANGE THIS when deployed
 const FOREST_SERVERS = new Set(['official-na-west-1','official-eu-west-2','official-asia-1','custom-slimewars','custom-nostorm','official-na-west-2','official-eu-central-1','official-sa-east-1','ranked-eu-west-1','custom-bigteams']);
 const SNOW_SERVERS = new Set(['official-na-east-2','official-eu-west-1','ranked-na-east-1','custom-scrim','custom-nostorm2','official-na-east-3','official-asia-2','official-oce-1','ranked-na-west-1','custom-ranked2']);
+const DESERT_SERVERS = new Set(['desert-na-east-1','desert-na-west-1','desert-eu-west-1','desert-asia-1','desert-sa-east-1']);
+const FRUIT_SERVERS = new Set(['fruit-na-east-1','fruit-na-west-1','fruit-eu-west-1','fruit-asia-1','fruit-sa-east-1']);
+const CANDY_SERVERS = new Set(['candy-na-east-1','candy-na-west-1','candy-eu-west-1','candy-asia-1','candy-sa-east-1']);
+const ZOMBIE_SERVERS = new Set(['zombie-na-east-1','zombie-na-west-1','zombie-eu-west-1','zombie-asia-1','zombie-sa-east-1']);
+const ZOMBIE_BOT_DAMAGE = 20;
 
 // =====================================================
 // SOCKET CONNECTION
@@ -785,6 +790,10 @@ function renderServerList() {
     'official-sa-east-1':'official',
     'ranked-na-east-1':'ranked','ranked-na-west-1':'ranked','ranked-eu-west-1':'ranked','custom-ranked2':'ranked',
     'custom-slimewars':'custom','custom-scrim':'custom','custom-nostorm':'custom','custom-nostorm2':'custom','custom-bigteams':'custom',
+    'desert-na-east-1':'official','desert-na-west-1':'official','desert-eu-west-1':'official','desert-asia-1':'official','desert-sa-east-1':'official',
+    'fruit-na-east-1':'custom','fruit-na-west-1':'custom','fruit-eu-west-1':'custom','fruit-asia-1':'custom','fruit-sa-east-1':'custom',
+    'candy-na-east-1':'custom','candy-na-west-1':'custom','candy-eu-west-1':'custom','candy-asia-1':'custom','candy-sa-east-1':'custom',
+    'zombie-na-east-1':'custom','zombie-na-west-1':'custom','zombie-eu-west-1':'custom','zombie-asia-1':'custom','zombie-sa-east-1':'custom',
   };
   // Client-side fallback: if server returns no list, show these
   const FALLBACK_SERVERS = [
@@ -809,6 +818,30 @@ function renderServerList() {
     {id:'custom-nostorm',name:'No Storm (Forest)',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
     {id:'custom-nostorm2',name:'No Storm (Snow)',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
     {id:'custom-bigteams',name:'Big Teams Forest',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    // Desert Map servers
+    {id:'desert-na-east-1',name:'Desert Dunes NA East',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'desert-na-west-1',name:'Desert Dunes NA West',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'desert-eu-west-1',name:'Desert Dunes EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'desert-asia-1',name:'Desert Dunes Asia',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'desert-sa-east-1',name:'Desert Dunes SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
+    // Fruit City servers
+    {id:'fruit-na-east-1',name:'Fruit City NA East',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'fruit-na-west-1',name:'Fruit City NA West',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'fruit-eu-west-1',name:'Fruit City EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'fruit-asia-1',name:'Fruit City Asia',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'fruit-sa-east-1',name:'Fruit City SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
+    // Candy Kingdom servers
+    {id:'candy-na-east-1',name:'Candy Kingdom NA East',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'candy-na-west-1',name:'Candy Kingdom NA West',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'candy-eu-west-1',name:'Candy Kingdom EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'candy-asia-1',name:'Candy Kingdom Asia',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'candy-sa-east-1',name:'Candy Kingdom SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
+    // Zombie Slime City (Ruined) servers
+    {id:'zombie-na-east-1',name:'Slime City Ruins NA East',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'zombie-na-west-1',name:'Slime City Ruins NA West',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'zombie-eu-west-1',name:'Slime City Ruins EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'zombie-asia-1',name:'Slime City Ruins Asia',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'zombie-sa-east-1',name:'Slime City Ruins SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
   ];
   const displayList = serverListData.length > 0 ? serverListData : FALLBACK_SERVERS;
   let filtered = displayList.filter(s => {
@@ -826,7 +859,7 @@ function renderServerList() {
     const full = srv.playerCount >= srv.maxP;
     row.className = 'server-row'+(tag==='official'?' featured':'');
     row.innerHTML = `
-      <div class="srv-name">${srv.name} <span class="srv-tag ${tagClass}">${tagLabel}</span>${FOREST_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(46,204,113,0.15);color:#2ecc71;border:1px solid rgba(46,204,113,0.4)">🌲 FOREST</span>':''}${SNOW_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(174,214,241,0.2);color:#aed6f1;border:1px solid rgba(174,214,241,0.4)">❄️ SNOW</span>':''}${srv.gameActive?'<span class="srv-tag" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)">IN GAME</span>':''}</div>
+      <div class="srv-name">${srv.name} <span class="srv-tag ${tagClass}">${tagLabel}</span>${FOREST_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(46,204,113,0.15);color:#2ecc71;border:1px solid rgba(46,204,113,0.4)">🌲 FOREST</span>':''}${SNOW_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(174,214,241,0.2);color:#aed6f1;border:1px solid rgba(174,214,241,0.4)">❄️ SNOW</span>':''}${DESERT_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(210,180,80,0.2);color:#f0c040;border:1px solid rgba(210,180,80,0.5)">🏜️ DESERT</span>':''}${FRUIT_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(255,100,150,0.15);color:#ff69b4;border:1px solid rgba(255,100,150,0.4)">🍓 FRUIT CITY</span>':''}${CANDY_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(255,100,255,0.15);color:#ff88ff;border:1px solid rgba(255,100,255,0.4)">🍭 CANDY</span>':''}${ZOMBIE_SERVERS.has(srv.id)?'<span class="srv-tag" style="background:rgba(80,200,80,0.15);color:#6fe06f;border:1px solid rgba(80,200,80,0.4)">🧟 ZOMBIES</span>':''}${srv.gameActive?'<span class="srv-tag" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)">IN GAME</span>':''}</div>
       <div class="srv-region">${srv.region}</div>
       <div class="srv-players"><span class="cnt">${srv.playerCount}</span><span class="max">/${srv.maxP}</span></div>
       <div class="srv-ping ${pingClass}">${ping}${typeof ping==='number'?'ms':''}</div>
@@ -1067,22 +1100,72 @@ function showServerBrowser() {
   socket.emit('getServerList');
 }
 
+// New custom-map servers — simulate a real lobby + game locally
+const LOCAL_ONLY_SERVERS = new Set([
+  'desert-na-east-1','desert-na-west-1','desert-eu-west-1','desert-asia-1','desert-sa-east-1',
+  'fruit-na-east-1','fruit-na-west-1','fruit-eu-west-1','fruit-asia-1','fruit-sa-east-1',
+  'candy-na-east-1','candy-na-west-1','candy-eu-west-1','candy-asia-1','candy-sa-east-1',
+  'zombie-na-east-1','zombie-na-west-1','zombie-eu-west-1','zombie-asia-1','zombie-sa-east-1',
+]);
+
+const MAP_TYPE_FOR_SERVER = {
+  'desert-na-east-1':'desert','desert-na-west-1':'desert','desert-eu-west-1':'desert','desert-asia-1':'desert','desert-sa-east-1':'desert',
+  'fruit-na-east-1':'fruit','fruit-na-west-1':'fruit','fruit-eu-west-1':'fruit','fruit-asia-1':'fruit','fruit-sa-east-1':'fruit',
+  'candy-na-east-1':'candy','candy-na-west-1':'candy','candy-eu-west-1':'candy','candy-asia-1':'candy','candy-sa-east-1':'candy',
+  'zombie-na-east-1':'zombie','zombie-na-west-1':'zombie','zombie-eu-west-1':'zombie','zombie-asia-1':'zombie','zombie-sa-east-1':'zombie',
+};
+
 function joinServer(lobbyId, name, region) {
   showConnecting();
   currentServer = { id: lobbyId, name, region };
   document.getElementById('lobbyTitle').textContent = name;
   document.getElementById('lRegion').textContent = region;
-  // Animate connection steps then actually join
+
+  if (LOCAL_ONLY_SERVERS.has(lobbyId)) {
+    // Simulate connecting, then go straight into lobby, then auto-start
+    const steps = document.querySelectorAll('.conn-step');
+    let s = 0;
+    function nextStep() {
+      if (s > 0) { steps[s-1].classList.remove('active'); steps[s-1].classList.add('done'); steps[s-1].querySelector('.step-icon').textContent = '\u2713'; }
+      if (s < steps.length - 1) { steps[s].classList.add('active'); s++; setTimeout(nextStep, 350 + Math.random()*200); }
+      else {
+        steps[s].classList.add('active');
+        setTimeout(() => {
+          // Fake a joinedLobby response
+          myLobbyId = lobbyId;
+          mySocketId = mySocketId || 'local-' + Math.random().toString(36).slice(2);
+          lobbyPlayersMap = {};
+          lobbyPlayersMap[mySocketId] = { id: mySocketId, name: playerUsername, ready: false, hp: 100, alive: true };
+          isReady = false;
+          hideConnecting();
+          showScreen('lobbyScreen');
+          renderLobbyPlayers();
+          document.getElementById('readyBtn').textContent = 'READY UP';
+          document.getElementById('readyBtn').classList.remove('is-ready');
+          document.getElementById('lobbyCountdown').classList.remove('visible');
+
+          // Update lobby info panel to show correct map
+          const mapLabels = {desert:'DESERT DUNES', fruit:'FRUIT CITY', candy:'CANDY KINGDOM', zombie:'SLIME CITY (RUINED)'};
+          const mt = MAP_TYPE_FOR_SERVER[lobbyId] || 'city';
+          const infoVals = document.querySelectorAll('.linfo-val');
+          if (infoVals[0]) infoVals[0].textContent = (mapLabels[mt] || 'SLIME CITY');
+          if (mt === 'zombie') {
+            addLobbyMessage(null, '\u26a0\ufe0f WARNING: This server is overrun with ZOMBIE BOTS (20 dmg each)!', 'system');
+          }
+        }, 400);
+      }
+    }
+    setTimeout(nextStep, 100);
+    return;
+  }
+
+  // Real backend servers — normal flow
   const steps = document.querySelectorAll('.conn-step');
   let s = 0;
   function nextStep() {
-    if (s > 0) { steps[s-1].classList.remove('active'); steps[s-1].classList.add('done'); steps[s-1].querySelector('.step-icon').textContent = '✓'; }
+    if (s > 0) { steps[s-1].classList.remove('active'); steps[s-1].classList.add('done'); steps[s-1].querySelector('.step-icon').textContent = '\u2713'; }
     if (s < steps.length - 1) { steps[s].classList.add('active'); s++; setTimeout(nextStep, 400 + Math.random() * 300); }
-    else {
-      steps[s].classList.add('active'); s++;
-      // Actual socket join happens here
-      socket.emit('joinLobby', { lobbyId, playerName: playerUsername });
-    }
+    else { steps[s].classList.add('active'); s++; socket.emit('joinLobby', { lobbyId, playerName: playerUsername }); }
   }
   setTimeout(nextStep, 100);
 }
@@ -1112,7 +1195,7 @@ function showConnError(msg) {
 }
 
 function leaveLobby() {
-  socket.emit('leaveLobby');
+  if (!LOCAL_ONLY_SERVERS.has(myLobbyId)) socket.emit('leaveLobby');
   myLobbyId = null;
   lobbyPlayersMap = {};
   showServerBrowser();
@@ -1120,10 +1203,33 @@ function leaveLobby() {
 
 function toggleReady() {
   isReady = !isReady;
-  socket.emit('setReady', { ready: isReady });
   const btn = document.getElementById('readyBtn');
   btn.textContent = isReady ? '✓ READY!' : 'READY UP';
   btn.classList.toggle('is-ready', isReady);
+
+  if (LOCAL_ONLY_SERVERS.has(myLobbyId)) {
+    if (isReady) {
+      let count = 5;
+      const cdEl = document.getElementById('lobbyCountdown');
+      const numEl = document.getElementById('countdownNum');
+      cdEl.classList.add('visible');
+      numEl.textContent = count;
+      const iv = setInterval(() => {
+        count--;
+        if (count > 0) { numEl.textContent = count; }
+        else {
+          clearInterval(iv);
+          cdEl.classList.remove('visible');
+          const seed = Math.floor(Math.random() * 99999);
+          currentMapType = MAP_TYPE_FOR_SERVER[myLobbyId] || 'city';
+          startOnlineMatch({ [mySocketId]: { id: mySocketId, name: playerUsername, ready: true, hp: 100, alive: true } }, seed);
+        }
+      }, 1000);
+    }
+    return;
+  }
+
+  socket.emit('setReady', { ready: isReady });
 }
 
 function sendLobbyChat() {
@@ -1400,10 +1506,11 @@ function generateSnow(seed=42){
 
 function spawnWeatherParticles(){
   if(weatherType==='none'){weatherParticles=[];return;}
-  const count=weatherType==='snow'?3:weatherType==='rain'?6:1;
+  const count=weatherType==='snow'?3:weatherType==='rain'?6:weatherType==='candy'?2:1;
   for(let i=0;i<count;i++){
     if(weatherType==='snow') weatherParticles.push({x:cam.x+Math.random()*(canvas.width/scopeZoom),y:cam.y-10,vx:(Math.random()-0.5)*20,vy:40+Math.random()*30,size:2+Math.random()*4,life:1,maxLife:1,type:'snow'});
     else if(weatherType==='rain') weatherParticles.push({x:cam.x+Math.random()*(canvas.width/scopeZoom),y:cam.y-10,vx:-30,vy:500+Math.random()*200,size:1,life:0.3,maxLife:0.3,type:'rain'});
+    else if(weatherType==='candy'){const hue=Math.floor(Math.random()*360);weatherParticles.push({x:cam.x+Math.random()*(canvas.width/scopeZoom),y:cam.y+Math.random()*(canvas.height/scopeZoom),vx:(Math.random()-0.5)*15,vy:-20-Math.random()*20,size:3+Math.random()*4,life:1.5,maxLife:1.5,type:'candy',color:`hsl(${hue},100%,75%)`});}
   }
   weatherParticles=weatherParticles.filter(p=>p.life>0).slice(-600);
 }
@@ -1423,12 +1530,19 @@ function renderWeather(){
       ctx.fillStyle='#e8f4f8';ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();
     }else if(p.type==='rain'){
       ctx.strokeStyle='#aed6f1';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x-5,p.y+10);ctx.stroke();
+    }else if(p.type==='candy'){
+      ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.5)';ctx.beginPath();ctx.arc(p.x-1,p.y-1,p.size*0.4,0,Math.PI*2);ctx.fill();
     }
   });
   ctx.globalAlpha=1;
   // Fog overlay
   if(weatherType==='snow'){
     ctx.fillStyle=`rgba(200,220,240,${0.06+Math.sin(Date.now()/3000)*0.02})`;
+    ctx.fillRect(cam.x,cam.y,canvas.width/scopeZoom,canvas.height/scopeZoom);
+  }
+  if(currentMapType==='zombie'){
+    ctx.fillStyle=`rgba(0,40,0,${0.12+Math.sin(Date.now()/2000)*0.04})`;
     ctx.fillRect(cam.x,cam.y,canvas.width/scopeZoom,canvas.height/scopeZoom);
   }
 }
@@ -2473,9 +2587,13 @@ function startOnlineMatch(playersMap, seed) {
   document.getElementById('serverLabel').textContent = currentServer ? currentServer.region : 'SERVER';
 
   // Use server-provided map seed so all clients see same map
-  currentMapType = FOREST_SERVERS.has(currentServer?.id) ? 'forest' : SNOW_SERVERS.has(currentServer?.id) ? 'snow' : 'city';
+  currentMapType = FOREST_SERVERS.has(currentServer?.id) ? 'forest' : SNOW_SERVERS.has(currentServer?.id) ? 'snow' : DESERT_SERVERS.has(currentServer?.id) ? 'desert' : FRUIT_SERVERS.has(currentServer?.id) ? 'fruit' : CANDY_SERVERS.has(currentServer?.id) ? 'candy' : ZOMBIE_SERVERS.has(currentServer?.id) ? 'zombie' : 'city';
   if(currentMapType==='forest') generateForest(seed);
   else if(currentMapType==='snow') generateSnow(seed);
+  else if(currentMapType==='desert') generateCity(seed);
+  else if(currentMapType==='fruit') generateCity(seed);
+  else if(currentMapType==='candy') generateCity(seed);
+  else if(currentMapType==='zombie') generateCity(seed);
   else generateCity(seed);
   spawnGroundItems(seed);
 
@@ -2500,10 +2618,14 @@ function startOnlineMatch(playersMap, seed) {
   barriacades=barriacades.filter(b=>!b.destroyed);
   weatherParticles=[];
   if(currentMapType==='snow') weatherType='snow';
+  else if(currentMapType==='candy') weatherType='candy';
   else weatherType='none';
   // Reset new systems
   boomerangs=[];firePatches=[];deployedShields=[];deathAnims=[];killEffects=[];poisonedEntities.clear();
   placedMines=[];smokeZones=[];killStreak=0;killStreakTimer=0;
+  // Reset zombie bots
+  zombieBots=[];zombieSpawnTimer=0;
+  if(currentMapType==='zombie'){for(let i=0;i<8;i++)setTimeout(()=>spawnZombieBot(),i*400);}
   spectating=false;document.getElementById('spectateBar').style.display='none';
   matchStats={firstKillDone:false,stormTime:0,inStorm:false,noHit:true,grenadeKill:false,sniperKills:0,meleeKills:0,poisonKill:false,flameKill:false};
   document.getElementById('challengeHud').style.display='block';
@@ -2637,6 +2759,110 @@ function soloStormTick(){
   },100);
 }
 
+// ===================== ZOMBIE BOT SYSTEM =====================
+let zombieBots = [];
+let zombieSpawnTimer = 0;
+const ZOMBIE_SPAWN_INTERVAL = 3; // seconds between zombie spawns
+const ZOMBIE_MAX_COUNT = 20;
+const ZOMBIE_DAMAGE = ZOMBIE_BOT_DAMAGE;
+const ZOMBIE_SPEED = 90;
+const ZOMBIE_HP = 60;
+const ZOMBIE_NAMES = ['ZOMBIE','Z-BOT','UNDEAD','GHOUL','SHAMBLER','CRAWLER','ROTGUT','BITTEN','INFECTED','LURKER'];
+let zombieBotIdCounter = 0;
+
+function spawnZombieBot() {
+  if(zombieBots.length >= ZOMBIE_MAX_COUNT) return;
+  const edge = Math.floor(Math.random()*4);
+  let sx,sy;
+  const margin=80;
+  if(edge===0){sx=margin+Math.random()*(MAP_W-margin*2);sy=margin;}
+  else if(edge===1){sx=MAP_W-margin;sy=margin+Math.random()*(MAP_H-margin*2);}
+  else if(edge===2){sx=margin+Math.random()*(MAP_W-margin*2);sy=MAP_H-margin;}
+  else{sx=margin;sy=margin+Math.random()*(MAP_H-margin*2);}
+  const safe=nudgeOutOfWall(sx,sy,18);
+  const id='zombie_'+(zombieBotIdCounter++);
+  zombieBots.push({id,x:safe.x,y:safe.y,hp:ZOMBIE_HP,maxHp:ZOMBIE_HP,alive:true,
+    name:ZOMBIE_NAMES[Math.floor(Math.random()*ZOMBIE_NAMES.length)],
+    attackTimer:0,radius:14,angle:0,
+    groanTimer:1+Math.random()*2,
+    color:'#6fe06f',color2:'#3aaa3a'
+  });
+  // Also add to remotePlayers so they appear on minimap and exist as targets
+  remotePlayers[id]={x:safe.x,y:safe.y,targetX:safe.x,targetY:safe.y,hp:ZOMBIE_HP,shield:0,
+    name:ZOMBIE_NAMES[Math.floor(Math.random()*ZOMBIE_NAMES.length)],
+    color:'#6fe06f',alive:true,angle:0,radius:14,
+    skin:{colorId:'green',faceId:'dead',hatId:'none',weaponColorId:'default',trailId:'none'},
+    isZombie:true};
+}
+
+function updateZombieBots(dt){
+  if(currentMapType!=='zombie') return;
+  // Spawn
+  zombieSpawnTimer+=dt;
+  if(zombieSpawnTimer>=ZOMBIE_SPAWN_INTERVAL && zombieBots.length<ZOMBIE_MAX_COUNT){
+    zombieSpawnTimer=0;
+    spawnZombieBot();
+  }
+  // Update each zombie
+  zombieBots.forEach(z=>{
+    if(!z.alive) return;
+    const rp=remotePlayers[z.id];
+    if(!rp){z.alive=false;return;}
+    // Move toward player
+    if(player.alive){
+      const dx=player.x-z.x,dy=player.y-z.y;
+      const dist=Math.hypot(dx,dy);
+      z.angle=Math.atan2(dy,dx);
+      rp.angle=z.angle;
+      if(dist>18){
+        const nx=z.x+(dx/dist)*ZOMBIE_SPEED*dt;
+        const ny=z.y+(dy/dist)*ZOMBIE_SPEED*dt;
+        const pos=resolveCollision({x:z.x,y:z.y,radius:14},nx,ny);
+        z.x=Math.max(14,Math.min(MAP_W-14,pos.x));
+        z.y=Math.max(14,Math.min(MAP_H-14,pos.y));
+      }
+      rp.x=z.x; rp.y=z.y; rp.targetX=z.x; rp.targetY=z.y;
+      // Attack player if close
+      z.attackTimer-=dt;
+      if(dist<28 && z.attackTimer<=0){
+        z.attackTimer=1.5;
+        if(player.alive){
+          let dmg=ZOMBIE_DAMAGE;
+          if(player.shield>0){const shDmg=Math.min(player.shield,dmg*0.5);player.shield-=shDmg;dmg-=shDmg;}
+          player.hp-=dmg;
+          addFloatingText(player.x,player.y-20,`-${ZOMBIE_DAMAGE} 🧟`,'#6fe06f');
+          document.getElementById('dmgFlash').style.background='rgba(0,200,0,0.35)';
+          setTimeout(()=>document.getElementById('dmgFlash').style.background='',180);
+          playSound('hit');
+          if(player.hp<=0){player.hp=0;player.alive=false;}
+        }
+      }
+    }
+  });
+  // Remove dead zombies from both lists
+  zombieBots=zombieBots.filter(z=>z.alive);
+}
+
+function hitZombie(zombieId, damage){
+  const z=zombieBots.find(b=>b.id===zombieId);
+  if(!z||!z.alive) return;
+  z.hp-=damage;
+  spawnParticle(z.x,z.y,'#6fe06f',5,120,0.4,4);
+  addFloatingText(z.x,z.y-20,`-${damage}`,'#e74c3c');
+  if(z.hp<=0){
+    z.alive=false;
+    const rp=remotePlayers[zombieId];
+    if(rp){rp.alive=false;rp.hp=0;}
+    const col='#6fe06f';
+    spawnDeathAnim(z.x,z.y,col,'splat');
+    addKillFeed(`💀 You eliminated ${z.name}`,'player-kill');
+    player.score++;player.kills.push({name:z.name,time:Date.now()});
+    tickChallenge('kills',1);
+    // Remove from remotePlayers after short delay
+    setTimeout(()=>{ delete remotePlayers[zombieId]; },2000);
+  }
+}
+
 // Update loop
 function update(dt){
   if(!gameRunning||gameOver)return;
@@ -2684,7 +2910,8 @@ function update(dt){
   updateKillStreak(dt);
   updateMines(dt);
   updateSmoke(dt);
-  // Spectate cam
+  // Zombie bots
+  updateZombieBots(dt);
   if(spectating){
     const t=spectateTargets[spectateIdx];
     if(t&&t.alive){cam.x=t.x-canvas.width/(2*scopeZoom);cam.y=t.y-canvas.height/(2*scopeZoom);cam.x=Math.max(0,Math.min(MAP_W-canvas.width/scopeZoom,cam.x));cam.y=Math.max(0,Math.min(MAP_H-canvas.height/scopeZoom,cam.y));}
@@ -2729,11 +2956,14 @@ function update(dt){
       Object.entries(remotePlayers).forEach(([id,rp])=>{
         if(!rp.alive||!b.alive) return;
         if(Math.hypot(b.x-rp.x,b.y-rp.y)<rp.radius+4){
-          // Pierce: crossbow doesn't die on first hit
           if(!b.pierce)b.alive=false;
           if(b.splash) spawnExplosion(b.x,b.y);
-          socket.emit('reportHit',{targetId:id,damage:b.damage,weaponKey:b.weaponKey});
-          if(b.isPoison)applyPoison(id,5);
+          if(rp.isZombie){
+            hitZombie(id,b.damage);
+          } else {
+            socket.emit('reportHit',{targetId:id,damage:b.damage,weaponKey:b.weaponKey});
+            if(b.isPoison)applyPoison(id,5);
+          }
         }
       });
     }
@@ -2859,8 +3089,168 @@ function render(){
       if(ba.hp!==undefined&&ba.hp<(ba.maxHp||3)){ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ba.x,ba.y);ctx.lineTo(ba.x+ba.w,ba.y+ba.h);ctx.stroke();}
       ctx.globalAlpha=1;
     });
+  } else if(currentMapType==='desert'){
+    // Desert sandy ground
+    ctx.fillStyle='#c8a05a';ctx.fillRect(0,0,MAP_W,MAP_H);
+    // Sand dune patches
+    ctx.fillStyle='#d4aa6a';
+    for(let i=0;i<350;i++){ctx.beginPath();ctx.ellipse((i*211)%MAP_W,(i*137)%MAP_H,40+i%50,20+i%25,i*0.1,0,Math.PI*2);ctx.fill();}
+    // Sandy roads
+    ctx.fillStyle='#b8924a';roads.forEach(r=>{ctx.fillRect(r.x,r.y,r.w,r.h);});
+    ctx.strokeStyle='rgba(255,220,120,0.4)';ctx.setLineDash([50,35]);ctx.lineWidth=2;
+    roads.forEach(r=>{if(r.horiz){ctx.beginPath();ctx.moveTo(r.x,r.y+r.h/2);ctx.lineTo(r.x+r.w,r.y+r.h/2);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(r.x+r.w/2,r.y);ctx.lineTo(r.x+r.w/2,r.y+r.h);ctx.stroke();}});
+    ctx.setLineDash([]);
+    // Desert buildings (sandstone colors)
+    const desertColors=['#c8955a','#d4a870','#b8854a','#e0b880','#a87840'];
+    buildings.forEach((b,bi)=>{
+      const dc=desertColors[bi%desertColors.length];
+      ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(b.x+7,b.y+7,b.w,b.h);
+      ctx.fillStyle=dc;ctx.fillRect(b.x,b.y,b.w,b.h);
+      // Arched windows
+      const cols2=Math.max(1,Math.floor(b.w/35));const rows2=b.floors||1;
+      const winW=Math.min(18,(b.w/cols2)-10),winH=Math.min(20,(b.h/rows2)-12);
+      for(let fr=0;fr<rows2;fr++)for(let fc=0;fc<cols2;fc++){
+        const wx=b.x+10+fc*(b.w/cols2),wy=b.y+8+fr*(b.h/rows2);
+        ctx.fillStyle='rgba(80,50,20,0.6)';ctx.fillRect(wx,wy,winW,winH);
+        ctx.fillStyle='rgba(200,160,80,0.3)';ctx.beginPath();ctx.arc(wx+winW/2,wy,winW/2,Math.PI,0);ctx.fill();
+      }
+      // Flat roof with parapet
+      ctx.fillStyle='rgba(255,220,100,0.25)';ctx.fillRect(b.x,b.y,b.w,7);
+    });
+    // Cacti decorations
+    for(let i=0;i<30;i++){
+      const cx2=(i*317+seed)%MAP_W,cy2=(i*271+seed)%MAP_H;
+      if(isSolidAt(cx2,cy2,20))continue;
+      ctx.fillStyle='#4a8c3a';ctx.fillRect(cx2-4,cy2-20,8,22);
+      ctx.fillRect(cx2-12,cy2-10,8,6);ctx.fillRect(cx2+4,cy2-14,8,6);
+    }
+    barriacades.forEach(ba=>{if(ba.destroyed)return;ctx.fillStyle='#8B7355';ctx.fillRect(ba.x,ba.y,ba.w,ba.h);ctx.strokeStyle='#6B5335';ctx.lineWidth=2;ctx.strokeRect(ba.x,ba.y,ba.w,ba.h);});
+  } else if(currentMapType==='fruit'){
+    // Fruit City - bright colorful pastel ground
+    ctx.fillStyle='#f0e8d0';ctx.fillRect(0,0,MAP_W,MAP_H);
+    // Colorful grass patches
+    const fruitGrass=['#d4edaa','#e8f5a0','#c8e890','#ddf0b0'];
+    for(let i=0;i<300;i++){ctx.fillStyle=fruitGrass[i%fruitGrass.length];ctx.fillRect((i*179)%MAP_W,(i*131)%MAP_H,45+i%35,30+i%22);}
+    // Rainbow roads
+    ctx.fillStyle='#e8d080';roads.forEach(r=>{ctx.fillRect(r.x,r.y,r.w,r.h);});
+    ctx.strokeStyle='rgba(255,100,150,0.5)';ctx.setLineDash([50,30]);ctx.lineWidth=3;
+    roads.forEach(r=>{if(r.horiz){ctx.beginPath();ctx.moveTo(r.x,r.y+r.h/2);ctx.lineTo(r.x+r.w,r.y+r.h/2);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(r.x+r.w/2,r.y);ctx.lineTo(r.x+r.w/2,r.y+r.h);ctx.stroke();}});
+    ctx.setLineDash([]);
+    // Fruit-themed buildings
+    const fruitBldColors=[['#ff8c69','#ff6040'],['#7ec850','#5aaa30'],['#ffd040','#ffb000'],['#ff69b4','#ee4499'],['#60c8ff','#30a0e0']];
+    buildings.forEach((b,bi)=>{
+      const [bc,rc]=fruitBldColors[bi%fruitBldColors.length];
+      ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(b.x+5,b.y+5,b.w,b.h);
+      ctx.fillStyle=bc;ctx.fillRect(b.x,b.y,b.w,b.h);
+      // Round windows
+      const cols2=Math.max(1,Math.floor(b.w/32));const rows2=b.floors||1;
+      for(let fr=0;fr<rows2;fr++)for(let fc=0;fc<cols2;fc++){
+        const wx=b.x+10+fc*(b.w/cols2)+5,wy=b.y+10+fr*(b.h/rows2)+3;
+        ctx.fillStyle='rgba(255,255,200,0.7)';ctx.beginPath();ctx.arc(wx,wy,7,0,Math.PI*2);ctx.fill();
+      }
+      ctx.fillStyle=rc;ctx.fillRect(b.x,b.y,b.w,8);
+    });
+    // Fruit tree decorations
+    const fruitEmojis=['🍎','🍊','🍋','🍇','🍓','🍉','🍑','🥭'];
+    for(let i=0;i<25;i++){
+      const fx=(i*337+seed)%MAP_W,fy=(i*293+seed)%MAP_H;
+      if(isSolidAt(fx,fy,20))continue;
+      ctx.fillStyle='#5aaa30';ctx.beginPath();ctx.arc(fx,fy,16,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#3a8010';ctx.beginPath();ctx.arc(fx-4,fy-4,10,0,Math.PI*2);ctx.fill();
+      ctx.font='14px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(fruitEmojis[i%fruitEmojis.length],fx,fy-8);
+    }
+    barriacades.forEach(ba=>{if(ba.destroyed)return;ctx.fillStyle='#a0d060';ctx.fillRect(ba.x,ba.y,ba.w,ba.h);ctx.strokeStyle='#70a030';ctx.lineWidth=2;ctx.strokeRect(ba.x,ba.y,ba.w,ba.h);});
+  } else if(currentMapType==='candy'){
+    // Candy Kingdom - pink/purple sugar land
+    ctx.fillStyle='#ffd0f0';ctx.fillRect(0,0,MAP_W,MAP_H);
+    // Sugar sparkle patches
+    for(let i=0;i<300;i++){
+      const hue=(i*37)%360;
+      ctx.fillStyle=`hsla(${hue},90%,85%,0.5)`;
+      ctx.fillRect((i*163)%MAP_W,(i*127)%MAP_H,30+i%35,20+i%20);
+    }
+    // Candy stripe roads
+    ctx.fillStyle='#f0a0d8';roads.forEach(r=>{ctx.fillRect(r.x,r.y,r.w,r.h);});
+    ctx.strokeStyle='rgba(255,60,180,0.6)';ctx.setLineDash([40,25]);ctx.lineWidth=4;
+    roads.forEach(r=>{if(r.horiz){ctx.beginPath();ctx.moveTo(r.x,r.y+r.h/2);ctx.lineTo(r.x+r.w,r.y+r.h/2);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(r.x+r.w/2,r.y);ctx.lineTo(r.x+r.w/2,r.y+r.h);ctx.stroke();}});
+    ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.setLineDash([20,45]);
+    roads.forEach(r=>{if(r.horiz){ctx.beginPath();ctx.moveTo(r.x,r.y+r.h/2);ctx.lineTo(r.x+r.w,r.y+r.h/2);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(r.x+r.w/2,r.y);ctx.lineTo(r.x+r.w/2,r.y+r.h);ctx.stroke();}});
+    ctx.setLineDash([]);
+    // Candy buildings
+    const candyColors=[['#ff80cc','#cc40aa'],['#a060ff','#7030dd'],['#ff6090','#cc2060'],['#60d0ff','#20a0cc'],['#ffaa30','#dd7800']];
+    buildings.forEach((b,bi)=>{
+      const [bc,rc]=candyColors[bi%candyColors.length];
+      ctx.fillStyle='rgba(255,200,255,0.3)';ctx.fillRect(b.x+5,b.y+5,b.w,b.h);
+      ctx.fillStyle=bc;ctx.fillRect(b.x,b.y,b.w,b.h);
+      // Star windows
+      const cols2=Math.max(1,Math.floor(b.w/30));const rows2=b.floors||1;
+      for(let fr=0;fr<rows2;fr++)for(let fc=0;fc<cols2;fc++){
+        const wx=b.x+10+fc*(b.w/cols2),wy=b.y+10+fr*(b.h/rows2);
+        ctx.fillStyle='rgba(255,255,180,0.8)';ctx.font='14px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('✦',wx,wy);
+      }
+      // Swirl rooftop
+      ctx.fillStyle=rc;ctx.fillRect(b.x,b.y,b.w,9);
+      // Candy cane stripes on roof
+      ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;
+      for(let sx2=b.x+4;sx2<b.x+b.w;sx2+=12){ctx.beginPath();ctx.moveTo(sx2,b.y);ctx.lineTo(sx2,b.y+9);ctx.stroke();}
+    });
+    // Candy decorations: lollipops
+    for(let i=0;i<20;i++){
+      const lx=(i*349+seed)%MAP_W,ly=(i*283+seed)%MAP_H;
+      if(isSolidAt(lx,ly,20))continue;
+      ctx.strokeStyle='#aa6060';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(lx,ly+20);ctx.stroke();
+      const lhue=(i*60)%360;
+      ctx.fillStyle=`hsl(${lhue},90%,65%)`;ctx.beginPath();ctx.arc(lx,ly-8,11,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=`hsl(${(lhue+120)%360},90%,75%)`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(lx,ly-8,7,0.3,2.5);ctx.stroke();
+    }
+    barriacades.forEach(ba=>{if(ba.destroyed)return;ctx.fillStyle='#d060cc';ctx.fillRect(ba.x,ba.y,ba.w,ba.h);ctx.strokeStyle='#a030aa';ctx.lineWidth=2;ctx.strokeRect(ba.x,ba.y,ba.w,ba.h);});
+  } else if(currentMapType==='zombie'){
+    // Ruined Slime City - dark, decayed, crumbling
+    ctx.fillStyle='#0a120a';ctx.fillRect(0,0,MAP_W,MAP_H);
+    // Toxic sludge puddles
+    for(let i=0;i<200;i++){
+      const alpha=0.15+((i*7)%10)*0.03;
+      ctx.fillStyle=`rgba(40,160,40,${alpha})`;
+      ctx.beginPath();ctx.ellipse((i*197)%MAP_W,(i*143)%MAP_H,30+i%40,15+i%20,i*0.2,0,Math.PI*2);ctx.fill();
+    }
+    // Cracked, dark roads
+    ctx.fillStyle='#181818';roads.forEach(r=>{ctx.fillRect(r.x,r.y,r.w,r.h);});
+    // Road cracks
+    ctx.strokeStyle='rgba(60,160,60,0.25)';ctx.setLineDash([8,12]);ctx.lineWidth=1;
+    roads.forEach(r=>{if(r.horiz){ctx.beginPath();ctx.moveTo(r.x,r.y+r.h/2-4);ctx.lineTo(r.x+r.w,r.y+r.h/2-4);ctx.stroke();ctx.beginPath();ctx.moveTo(r.x,r.y+r.h/2+6);ctx.lineTo(r.x+r.w,r.y+r.h/2+6);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(r.x+r.w/2-4,r.y);ctx.lineTo(r.x+r.w/2-4,r.y+r.h);ctx.stroke();}});
+    ctx.setLineDash([]);
+    // Ruined buildings - crumbled, dark, overgrown
+    buildings.forEach((b,bi)=>{
+      const ruin=(bi*13)%3; // 0=intact,1=partial,2=rubble
+      ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(b.x+6,b.y+6,b.w,b.h);
+      ctx.fillStyle=ruin===2?'#1a1a1a':ruin===1?'#222':'#1e2a1e';
+      ctx.fillRect(b.x,b.y,b.w,b.h);
+      // Broken windows
+      const cols2=Math.max(1,Math.floor(b.w/30));const rows2=b.floors||1;
+      for(let fr=0;fr<rows2;fr++)for(let fc=0;fc<cols2;fc++){
+        const wx=b.x+8+fc*(b.w/cols2),wy=b.y+6+fr*(b.h/rows2);
+        const broken=(fr*7+fc*3+bi*5)%4===0;
+        ctx.fillStyle=broken?'rgba(60,160,60,0.15)':'rgba(20,80,20,0.4)';
+        ctx.fillRect(wx,wy,14,12);
+        if(broken){ctx.strokeStyle='rgba(80,180,80,0.3)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(wx,wy);ctx.lineTo(wx+14,wy+12);ctx.stroke();ctx.beginPath();ctx.moveTo(wx+14,wy);ctx.lineTo(wx,wy+12);ctx.stroke();}
+      }
+      // Slime/moss overgrowth
+      ctx.fillStyle='rgba(40,140,40,0.35)';
+      ctx.fillRect(b.x,b.y+b.h-10,b.w,10);
+      ctx.fillRect(b.x,b.y,10,b.h);
+      // Rubble chunks on top for heavily ruined
+      if(ruin>=1){
+        ctx.fillStyle='#222';
+        const rubW=20+bi%30,rubH=15+bi%20;
+        ctx.fillRect(b.x+b.w-rubW,b.y,rubW,rubH);
+        ctx.fillRect(b.x,b.y,rubW*0.6,rubH*0.7);
+      }
+      // Green neon trim
+      ctx.strokeStyle='rgba(40,180,40,0.15)';ctx.lineWidth=1;ctx.strokeRect(b.x,b.y,b.w,b.h);
+    });
+    // Toxic barricades
+    barriacades.forEach(ba=>{if(ba.destroyed)return;const alpha=ba.hp!==undefined?ba.hp/(ba.maxHp||3):1;ctx.globalAlpha=alpha;ctx.fillStyle='#1a3a1a';ctx.fillRect(ba.x,ba.y,ba.w,ba.h);ctx.strokeStyle='rgba(60,200,60,0.6)';ctx.lineWidth=2;ctx.strokeRect(ba.x,ba.y,ba.w,ba.h);ctx.globalAlpha=1;});
   } else {
-    ctx.fillStyle='#1a1a1a';ctx.fillRect(0,0,MAP_W,MAP_H);
     ctx.fillStyle='#222';roads.forEach(r=>{ctx.fillRect(r.x,r.y,r.w,r.h);});
     ctx.strokeStyle='rgba(255,220,50,0.25)';ctx.setLineDash([60,40]);ctx.lineWidth=3;
     roads.forEach(r=>{if(r.horiz){ctx.beginPath();ctx.moveTo(r.x,r.y+r.h/2);ctx.lineTo(r.x+r.w,r.y+r.h/2);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(r.x+r.w/2,r.y);ctx.lineTo(r.x+r.w/2,r.y+r.h);ctx.stroke();}});
@@ -2900,6 +3290,35 @@ function render(){
   // Draw remote players (real human opponents)
   Object.values(remotePlayers).forEach(rp=>{
     if(!rp.alive)return;
+    if(rp.isZombie){
+      // Draw zombie bot differently
+      ctx.save();ctx.translate(rp.x,rp.y);
+      // Shadow
+      ctx.fillStyle='rgba(0,0,0,0.4)';ctx.beginPath();ctx.ellipse(0,10,14,7,0,0,Math.PI*2);ctx.fill();
+      // Zombie body (sickly green)
+      const zg=ctx.createRadialGradient(-4,-4,2,0,0,14);
+      zg.addColorStop(0,'#8fe88f');zg.addColorStop(1,'#3aaa3a');
+      ctx.fillStyle=zg;ctx.beginPath();ctx.arc(0,0,14,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(0,200,0,0.5)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,14,0,Math.PI*2);ctx.stroke();
+      // Zombie face
+      ctx.font='14px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('🧟',0,1);
+      // Toxic glow
+      const pulse=Math.sin(Date.now()/400)*0.3+0.7;
+      ctx.globalAlpha=pulse*0.25;
+      ctx.fillStyle='#00ff00';ctx.beginPath();ctx.arc(0,0,20,0,Math.PI*2);ctx.fill();
+      ctx.globalAlpha=1;
+      ctx.restore();
+      // Zombie name tag
+      ctx.fillStyle='rgba(0,0,0,0.75)';const tw=ctx.measureText(rp.name||'ZOMBIE').width+12;
+      ctx.fillRect(rp.x-tw/2,rp.y-45,tw,14);
+      ctx.fillStyle='#6fe06f';ctx.font='bold 10px Oswald';ctx.textAlign='center';ctx.fillText(rp.name||'ZOMBIE',rp.x,rp.y-34);
+      // HP bar
+      const bw=48,bh=5,bx=rp.x-bw/2,by2=rp.y-16-14;
+      ctx.fillStyle='#0a0a0a';ctx.fillRect(bx,by2,bw,bh);
+      const zhr=rp.hp/60;ctx.fillStyle='#6fe06f';ctx.fillRect(bx,by2,bw*Math.max(0,zhr),bh);
+      ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=1;ctx.strokeRect(bx,by2,bw,bh);
+      return;
+    }
     spawnTrail(rp.x, rp.y, rp.skin);
     drawPlayerWithSkin(ctx, rp.x, rp.y, rp.angle||0, rp.skin||{colorId:'green',hatId:'none',faceId:'normal',trailId:'none',weaponColorId:'default',titleId:'none'}, rp.name, false);
     // HP bar
@@ -3009,6 +3428,7 @@ function gameLoop(ts){
 
 function endGame(win, winnerName, results) {
   gameRunning=false;
+  zombieBots=[];zombieSpawnTimer=0;
   stopPosSending();
   if(soloStormInterval) clearInterval(soloStormInterval);
   spectating=false;document.getElementById('spectateBar').style.display='none';
