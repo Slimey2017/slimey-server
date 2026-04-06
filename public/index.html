@@ -844,7 +844,11 @@ function renderServerList() {
     {id:'zombie-sa-east-1',name:'Slime City Ruins SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
   ];
   const displayList = serverListData.length > 0 ? serverListData : FALLBACK_SERVERS;
-  let filtered = displayList.filter(s => {
+  // Always append the new custom servers that the backend doesn't know about
+  const EXTRA_SERVER_IDS = new Set(displayList.map(s=>s.id));
+  const EXTRA_SERVERS = FALLBACK_SERVERS.filter(s=>!EXTRA_SERVER_IDS.has(s.id));
+  const mergedList = [...displayList, ...EXTRA_SERVERS];
+  let filtered = mergedList.filter(s => {
     const rMatch = activeRegionFilter === 'ALL' || s.region.startsWith(activeRegionFilter);
     const nMatch = s.name.toLowerCase().includes(search);
     return rMatch && nMatch;
@@ -1100,70 +1104,32 @@ function showServerBrowser() {
   socket.emit('getServerList');
 }
 
-// These servers are client-side only — no backend needed
-const LOCAL_ONLY_SERVERS = new Set([
-  'desert-na-east-1','desert-na-west-1','desert-eu-west-1','desert-asia-1','desert-sa-east-1',
-  'fruit-na-east-1','fruit-na-west-1','fruit-eu-west-1','fruit-asia-1','fruit-sa-east-1',
-  'candy-na-east-1','candy-na-west-1','candy-eu-west-1','candy-asia-1','candy-sa-east-1',
-  'zombie-na-east-1','zombie-na-west-1','zombie-eu-west-1','zombie-asia-1','zombie-sa-east-1',
-]);
-
 function joinServer(lobbyId, name, region) {
-  currentServer = { id: lobbyId, name, region };
-  if (LOCAL_ONLY_SERVERS.has(lobbyId)) {
-    startLocalCustomGame(lobbyId);
-    return;
-  }
   showConnecting();
+  currentServer = { id: lobbyId, name, region };
   document.getElementById('lobbyTitle').textContent = name;
   document.getElementById('lRegion').textContent = region;
+  // Update lobby map info
+  const mapNames = {forest:'FOREST',snow:'SNOW CITY',desert:'DESERT DUNES',fruit:'FRUIT CITY',candy:'CANDY KINGDOM',zombie:'SLIME CITY (RUINED)',city:'SLIME CITY'};
+  const mt = FOREST_SERVERS.has(lobbyId)?'forest':SNOW_SERVERS.has(lobbyId)?'snow':DESERT_SERVERS.has(lobbyId)?'desert':FRUIT_SERVERS.has(lobbyId)?'fruit':CANDY_SERVERS.has(lobbyId)?'candy':ZOMBIE_SERVERS.has(lobbyId)?'zombie':'city';
+  const mapEl=document.querySelector('.linfo-val');if(mapEl)mapEl.textContent=mapNames[mt]||'SLIME CITY';
+  if(ZOMBIE_SERVERS.has(lobbyId)){
+    // Show zombie warning in lobby
+    setTimeout(()=>{const el=document.querySelector('.lobby-info-box');if(el){const w=document.createElement('div');w.className='linfo-row';w.innerHTML='<span class="linfo-label" style="color:#6fe06f">⚠️ ZOMBIES</span><span class="linfo-val" style="color:#6fe06f">20 DMG EACH</span>';el.appendChild(w);}},300);
+  }
+  // Animate connection steps then actually join
   const steps = document.querySelectorAll('.conn-step');
   let s = 0;
   function nextStep() {
-    if (s > 0) { steps[s-1].classList.remove('active'); steps[s-1].classList.add('done'); steps[s-1].querySelector('.step-icon').textContent = '\u2713'; }
+    if (s > 0) { steps[s-1].classList.remove('active'); steps[s-1].classList.add('done'); steps[s-1].querySelector('.step-icon').textContent = '✓'; }
     if (s < steps.length - 1) { steps[s].classList.add('active'); s++; setTimeout(nextStep, 400 + Math.random() * 300); }
-    else { steps[s].classList.add('active'); s++; socket.emit('joinLobby', { lobbyId, playerName: playerUsername }); }
+    else {
+      steps[s].classList.add('active'); s++;
+      // Actual socket join happens here
+      socket.emit('joinLobby', { lobbyId, playerName: playerUsername });
+    }
   }
   setTimeout(nextStep, 100);
-}
-
-function startLocalCustomGame(lobbyId) {
-  const mapType = DESERT_SERVERS.has(lobbyId) ? 'desert'
-    : FRUIT_SERVERS.has(lobbyId)  ? 'fruit'
-    : CANDY_SERVERS.has(lobbyId)  ? 'candy'
-    : ZOMBIE_SERVERS.has(lobbyId) ? 'zombie'
-    : 'city';
-  currentMapType = mapType;
-  myLobbyId = null;
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('gameContainer').classList.add('active');
-  document.getElementById('pingDisplay').style.display = 'none';
-  const seed = Math.floor(Math.random() * 99999);
-  generateCity(seed);
-  spawnGroundItems(seed + 1);
-  const safeSpot = findSafeSpawn(MAP_W / 2, MAP_H / 2, 0);
-  player.x = safeSpot.x; player.y = safeSpot.y;
-  player.hp = 100; player.shield = 0;
-  player.inventory = [null, null, null, null, null];
-  player.alive = true; player.score = 0; player.kills = [];
-  player.reloading = false; player.name = playerUsername;
-  document.getElementById('playerNameHud').textContent = '\ud83d\udfe2 ' + playerUsername;
-  initPlayerInventory();
-  remotePlayers = {}; bullets = []; particles = []; floatingTexts = []; grenades = [];
-  dayTime = 0; scopeZoom = 1; lootCrates = []; weatherParticles = [];
-  weatherType = mapType === 'candy' ? 'candy' : 'none';
-  boomerangs = []; firePatches = []; deployedShields = []; deathAnims = []; killEffects = [];
-  poisonedEntities.clear(); placedMines = []; smokeZones = []; killStreak = 0; killStreakTimer = 0;
-  zombieBots = []; zombieSpawnTimer = 0;
-  if (mapType === 'zombie') { for (let i = 0; i < 8; i++) setTimeout(() => spawnZombieBot(), i * 400); }
-  spectating = false; document.getElementById('spectateBar').style.display = 'none';
-  matchStats = { firstKillDone:false,stormTime:0,inStorm:false,noHit:true,grenadeKill:false,sniperKills:0,meleeKills:0,poisonKill:false,flameKill:false };
-  document.getElementById('challengeHud').style.display = 'block';
-  updateChallengeHUD();
-  serverStorm = { centerX:MAP_W/2,centerY:MAP_H/2,radius:MAP_W*1.06,targetRadius:MAP_W*0.76,phase:1,phaseTimer:0,phaseDuration:60,damagePerSec:5 };
-  gameOver = false; gameRunning = true;
-  updateCamera();
-  soloStormTick();
 }
 
 let currentServer = null;
