@@ -1291,6 +1291,7 @@ function spawnHealEffect(x,y){spawnParticle(x,y,'#2ecc71',10,100,0.8,6);}
 let buildings=[],roads=[],lootSpawns=[],barriacades=[];
 let trees=[],forestClearings=[],forestPaths=[];
 let currentMapType='city';
+let currentSeed=42;
 function seededRand(seed){let s=seed;return()=>{s=Math.sin(s)*10000;return s-Math.floor(s);};}
 
 function generateCity(seed=42){
@@ -2523,6 +2524,7 @@ function startOnlineMatch(playersMap, seed) {
 
   // Use server-provided map seed so all clients see same map
   currentMapType = FOREST_SERVERS.has(currentServer?.id) ? 'forest' : SNOW_SERVERS.has(currentServer?.id) ? 'snow' : DESERT_SERVERS.has(currentServer?.id) ? 'desert' : FRUIT_SERVERS.has(currentServer?.id) ? 'fruit' : CANDY_SERVERS.has(currentServer?.id) ? 'candy' : ZOMBIE_SERVERS.has(currentServer?.id) ? 'zombie' : 'city';
+  currentSeed=seed;
   if(currentMapType==='forest') generateForest(seed);
   else if(currentMapType==='snow') generateSnow(seed);
   else if(currentMapType==='desert') generateCity(seed);
@@ -3054,7 +3056,7 @@ function render(){
     });
     // Cacti decorations
     for(let i=0;i<30;i++){
-      const cx2=(i*317+seed)%MAP_W,cy2=(i*271+seed)%MAP_H;
+      const cx2=(i*317+currentSeed)%MAP_W,cy2=(i*271+currentSeed)%MAP_H;
       if(isSolidAt(cx2,cy2,20))continue;
       ctx.fillStyle='#4a8c3a';ctx.fillRect(cx2-4,cy2-20,8,22);
       ctx.fillRect(cx2-12,cy2-10,8,6);ctx.fillRect(cx2+4,cy2-14,8,6);
@@ -3088,7 +3090,7 @@ function render(){
     // Fruit tree decorations
     const fruitEmojis=['🍎','🍊','🍋','🍇','🍓','🍉','🍑','🥭'];
     for(let i=0;i<25;i++){
-      const fx=(i*337+seed)%MAP_W,fy=(i*293+seed)%MAP_H;
+      const fx=(i*337+currentSeed)%MAP_W,fy=(i*293+currentSeed)%MAP_H;
       if(isSolidAt(fx,fy,20))continue;
       ctx.fillStyle='#5aaa30';ctx.beginPath();ctx.arc(fx,fy,16,0,Math.PI*2);ctx.fill();
       ctx.fillStyle='#3a8010';ctx.beginPath();ctx.arc(fx-4,fy-4,10,0,Math.PI*2);ctx.fill();
@@ -3131,7 +3133,7 @@ function render(){
     });
     // Candy decorations: lollipops
     for(let i=0;i<20;i++){
-      const lx=(i*349+seed)%MAP_W,ly=(i*283+seed)%MAP_H;
+      const lx=(i*349+currentSeed)%MAP_W,ly=(i*283+currentSeed)%MAP_H;
       if(isSolidAt(lx,ly,20))continue;
       ctx.strokeStyle='#aa6060';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(lx,ly+20);ctx.stroke();
       const lhue=(i*60)%360;
@@ -3714,3 +3716,4 @@ function spawnTrail(x,y,skin){
 loadSkins();
 </script>
 </body>
+</html>
