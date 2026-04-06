@@ -25,7 +25,7 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 const MAX_PLAYERS_PER_LOBBY = 35;
 const LOBBY_START_COUNTDOWN = 5; // seconds after enough players ready
 const MIN_READY_TO_START = 3;
-const MAP_W = 3500, MAP_H = 3500;
+const MAP_W = 5000, MAP_H = 5000;
 
 // Storm config (server is authoritative)
 const STORM_CONFIG = {
