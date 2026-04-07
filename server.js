@@ -576,6 +576,6 @@ function randomColor() {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`\n🟢 Slimey's Battle Royale server running on port ${PORT}`);
-  console.log(`   Open: https://slimey-server.onrender.com);
+  console.log(`   Open: http://localhost:${PORT}`);
   console.log(`   Lobbies: ${SERVER_ROOMS.length} active\n`);
 });
