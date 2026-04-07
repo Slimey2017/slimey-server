@@ -473,8 +473,56 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ===================== VOICE CHAT (WebRTC signaling) =====================
+  // Relay WebRTC offer to a specific peer
+  socket.on('voiceOffer', ({ targetId, offer }) => {
+    const lobby = getLobbyForSocket(socket);
+    if (!lobby) return;
+    io.to(targetId).emit('voiceOffer', { fromId: socket.id, offer });
+  });
+
+  // Relay WebRTC answer back to offerer
+  socket.on('voiceAnswer', ({ targetId, answer }) => {
+    io.to(targetId).emit('voiceAnswer', { fromId: socket.id, answer });
+  });
+
+  // Relay ICE candidates
+  socket.on('voiceIce', ({ targetId, candidate }) => {
+    io.to(targetId).emit('voiceIce', { fromId: socket.id, candidate });
+  });
+
+  // Player joined voice — notify peers in same lobby to initiate offers
+  socket.on('voiceJoin', () => {
+    const lobby = getLobbyForSocket(socket);
+    if (!lobby) return;
+    // Tell existing voice members about this new peer (they initiate offers to new joiner)
+    socket.to(socket.data.lobbyId).emit('voicePeerJoined', { peerId: socket.id });
+    console.log(`[voice] ${socket.data.name} joined voice in lobby ${socket.data.lobbyId}`);
+  });
+
+  // Player left voice
+  socket.on('voiceLeave', () => {
+    const lobby = getLobbyForSocket(socket);
+    if (!lobby) return;
+    socket.to(socket.data.lobbyId).emit('voicePeerLeft', { peerId: socket.id });
+  });
+
+  // Speaking indicator (no audio data — just presence signal for HUD)
+  socket.on('voiceSpeaking', ({ speaking }) => {
+    const lobby = getLobbyForSocket(socket);
+    if (!lobby) return;
+    socket.to(socket.data.lobbyId).emit('voiceSpeakingUpdate', {
+      peerId: socket.id,
+      speaking,
+    });
+  });
+
   // ---- DISCONNECT ----
   socket.on('disconnect', () => {
+    const lobby = getLobbyForSocket(socket);
+    if (lobby) {
+      socket.to(socket.data.lobbyId).emit('voicePeerLeft', { peerId: socket.id });
+    }
     leaveCurrentLobby(socket);
     console.log(`[disconnect] ${socket.id}`);
   });
