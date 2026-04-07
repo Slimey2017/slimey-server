@@ -47,16 +47,24 @@ const lobbies = {};
 
 // Pre-defined server rooms (matching client SERVER_DEFS)
 const SERVER_ROOMS = [
-    { id: 'official-na-east-1', name: 'Official NA-East #1', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'official-na-east-2', name: 'Official NA-East #2', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'official-na-west-1', name: 'Official NA-West #1', region: 'NA-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'official-eu-west-1', name: 'Official EU-West #1', region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'official-eu-west-2', name: 'Official EU-West #2', region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'official-asia-1',    name: 'Official Asia-Pacific', region: 'ASIA',  maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'ranked-na-east-1',   name: 'Ranked Competitive',  region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'custom-slimewars',   name: 'SLIME WARS Custom #4', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'custom-scrim',       name: 'Pro Scrim Practice',  region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'custom-nostorm',     name: 'Chill Zone No-Storm', region: 'NA-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
+    {id:'official-na-east-1',name:'NA East #1',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-na-east-2',name:'NA East #2',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-na-east-3',name:'NA East #3',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-na-west-1',name:'NA West #1',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-na-west-2',name:'NA West #2',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-eu-west-1',name:'EU West #1',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-eu-west-2',name:'EU West #2',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-eu-central-1',name:'EU Central #1',region:'EU-CENTRAL',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-asia-1',name:'Asia Pacific #1',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-asia-2',name:'Asia Pacific #2',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-oce-1',name:'Oceania #1',region:'OCE',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-sa-east-1',name:'South America #1',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'ranked-na-east-1',name:'Ranked NA East',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'ranked-na-west-1',name:'Ranked NA West',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'ranked-eu-west-1',name:'Ranked EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'custom-ranked2',name:'Ranked Competitive',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'custom-slimewars',name:'Slime Wars',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'custom-scrim',name:'Scrim Zone',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
     {id:'custom-nostorm',name:'No Storm (Forest)',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
     {id:'custom-nostorm2',name:'No Storm (Snow)',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
     {id:'custom-bigteams',name:'Big Teams Forest',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
@@ -80,7 +88,8 @@ const SERVER_ROOMS = [
     {id:'zombie-eu-west-1',name:'Slime City Ruins EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
     {id:'zombie-asia-1',name:'Slime City Ruins Asia',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
     {id:'zombie-sa-east-1',name:'Slime City Ruins SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
-];
+  ];
+
 
 // Init all lobby slots
 SERVER_ROOMS.forEach(room => {
