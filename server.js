@@ -551,8 +551,8 @@ function startGame(lobbyId) {
   if (!lobby) return;
   lobby.gameActive = true;
 
-  // Reset enemies list for the new game
-  lobby.enemies = [];
+  // 1. Initialize the enemies array for this lobby
+  lobby.enemies = []; 
 
   const players = Object.values(lobby.players);
   players.forEach((p, i) => {
@@ -562,53 +562,26 @@ function startGame(lobbyId) {
     p.kills = 0;
     p.eliminatedAt = null;
     p.ready = false;
-    
-    // Existing spawn logic: spread players in a ring
+
+    // Existing spawn logic
     const angle = (i / players.length) * Math.PI * 2;
     p.x = MAP_W / 2 + Math.cos(angle) * 800 + (Math.random() - 0.5) * 300;
     p.y = MAP_H / 2 + Math.sin(angle) * 800 + (Math.random() - 0.5) * 300;
 
-    // ADDED: Spawn a zombie at this player's exact POV/coordinates
+    // 2. Spawn zombie at the player's new position
     spawnZombieNearPlayer(p.id, lobbyId);
-  });
+  }); // End of forEach
 
-  // Tell all players the game is starting
+  // 3. Emit the start event including enemies
   io.to(lobbyId).emit('gameStarting', {
     players: lobby.players,
-    enemies: lobby.enemies, // Include the initial zombies in the start packet
+    enemies: lobby.enemies, 
     mapSeed: Math.floor(Math.random() * 99999),
   });
 
-  // Start the server-side storm
-  startStorm(lobbyId);
-  console.log(`[${lobbyId}] Game started with ${players.length} players and initial zombies.`);
-}
-
-  // Assign spawn positions spread across the map
-  const players = Object.values(lobby.players);
-  players.forEach((p, i) => {
-    p.alive = true;
-    p.hp = 100;
-    p.shield = 0;
-    p.kills = 0;
-    p.eliminatedAt = null;
-    p.ready = false;
-    // Spread spawns in a ring
-    const angle = (i / players.length) * Math.PI * 2;
-    p.x = MAP_W / 2 + Math.cos(angle) * 800 + (Math.random() - 0.5) * 300;
-    p.y = MAP_H / 2 + Math.sin(angle) * 800 + (Math.random() - 0.5) * 300;
-  });
-
-  // Tell all players the game is starting with spawn positions
-  io.to(lobbyId).emit('gameStarting', {
-    players: lobby.players,
-    mapSeed: Math.floor(Math.random() * 99999), // clients use same seed to generate same map
-  });
-
-  // Start the server-side storm
   startStorm(lobbyId);
   console.log(`[${lobbyId}] Game started with ${players.length} players.`);
-}
+} // <--- Ensure ONLY ONE brace is here before randomColor()
 
 function randomColor() {
   const colors = ['#e74c3c','#9b59b6','#1abc9c','#e67e22','#f39c12','#3498db','#2ecc71','#e91e63','#ff5722','#00bcd4'];
