@@ -47,16 +47,24 @@ const lobbies = {};
 
 // Pre-defined server rooms (matching client SERVER_DEFS)
 const SERVER_ROOMS = [
-    { id: 'official-na-east-1', name: 'Official NA-East #1', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'official-na-east-2', name: 'Official NA-East #2', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'official-na-west-1', name: 'Official NA-West #1', region: 'NA-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'official-eu-west-1', name: 'Official EU-West #1', region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'official-eu-west-2', name: 'Official EU-West #2', region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'official-asia-1',    name: 'Official Asia-Pacific', region: 'ASIA',  maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'ranked-na-east-1',   name: 'Ranked Competitive',  region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'custom-slimewars',   name: 'SLIME WARS Custom #4', region: 'NA-EAST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'custom-scrim',       name: 'Pro Scrim Practice',  region: 'EU-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
-    { id: 'custom-nostorm',     name: 'Chill Zone No-Storm', region: 'NA-WEST', maxP: MAX_PLAYERS_PER_LOBBY },
+    {id:'official-na-east-1',name:'NA East #1',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-na-east-2',name:'NA East #2',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-na-east-3',name:'NA East #3',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-na-west-1',name:'NA West #1',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-na-west-2',name:'NA West #2',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-eu-west-1',name:'EU West #1',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-eu-west-2',name:'EU West #2',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-eu-central-1',name:'EU Central #1',region:'EU-CENTRAL',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-asia-1',name:'Asia Pacific #1',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-asia-2',name:'Asia Pacific #2',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-oce-1',name:'Oceania #1',region:'OCE',playerCount:0,maxP:35,gameActive:false},
+    {id:'official-sa-east-1',name:'South America #1',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'ranked-na-east-1',name:'Ranked NA East',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'ranked-na-west-1',name:'Ranked NA West',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'ranked-eu-west-1',name:'Ranked EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'custom-ranked2',name:'Ranked Competitive',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
+    {id:'custom-slimewars',name:'Slime Wars',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
+    {id:'custom-scrim',name:'Scrim Zone',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
     {id:'custom-nostorm',name:'No Storm (Forest)',region:'NA-WEST',playerCount:0,maxP:35,gameActive:false},
     {id:'custom-nostorm2',name:'No Storm (Snow)',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
     {id:'custom-bigteams',name:'Big Teams Forest',region:'NA-EAST',playerCount:0,maxP:35,gameActive:false},
@@ -80,7 +88,8 @@ const SERVER_ROOMS = [
     {id:'zombie-eu-west-1',name:'Slime City Ruins EU West',region:'EU-WEST',playerCount:0,maxP:35,gameActive:false},
     {id:'zombie-asia-1',name:'Slime City Ruins Asia',region:'ASIA',playerCount:0,maxP:35,gameActive:false},
     {id:'zombie-sa-east-1',name:'Slime City Ruins SA East',region:'SA-EAST',playerCount:0,maxP:35,gameActive:false},
-];
+  ];
+
 
 // Init all lobby slots
 SERVER_ROOMS.forEach(room => {
@@ -93,11 +102,10 @@ function createLobby(room) {
     name: room.name,
     region: room.region,
     maxP: room.maxP,
-    players: {},
-    enemies: [],       // Add this line to track zombies
+    players: {},       // { [socketId]: playerData }
     gameActive: false,
-    countdown: null,
-    storm: null,
+    countdown: null,   // setTimeout handle
+    storm: null,       // storm state when game is running
     stormInterval: null,
   };
 }
@@ -465,37 +473,79 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ===================== VOICE CHAT SIGNALING =====================
+  socket.on('voiceJoin', ({ name }) => {
+    const lobbyId = socket.data.lobbyId;
+    if (!lobbyId) return;
+    socket.data.voiceName = String(name).slice(0, 20);
+    socket.data.inVoice = true;
+
+    // Send existing voice members to the joiner
+    const room = io.sockets.adapter.rooms.get(lobbyId);
+    const existingMembers = [];
+    if (room) {
+      room.forEach(sid => {
+        if (sid !== socket.id) {
+          const s = io.sockets.sockets.get(sid);
+          if (s && s.data.inVoice) existingMembers.push({ socketId: sid, name: s.data.voiceName || 'Slimey' });
+        }
+      });
+    }
+    socket.emit('voiceChannelMembers', { members: existingMembers });
+
+    // Notify others in the lobby that a new peer joined voice
+    socket.to(lobbyId).emit('voicePeerJoined', { socketId: socket.id, name: socket.data.voiceName });
+  });
+
+  socket.on('voiceLeave', () => {
+    const lobbyId = socket.data.lobbyId;
+    socket.data.inVoice = false;
+    if (lobbyId) socket.to(lobbyId).emit('voicePeerLeft', { socketId: socket.id });
+  });
+
+  // WebRTC offer/answer/ICE relay
+  socket.on('voiceOffer', ({ targetId, sdp }) => {
+    const lobbyId = socket.data.lobbyId;
+    if (!lobbyId) return;
+    io.to(targetId).emit('voiceOffer', {
+      fromId: socket.id,
+      fromName: socket.data.voiceName || socket.data.name || 'Slimey',
+      sdp,
+    });
+  });
+
+  socket.on('voiceAnswer', ({ targetId, sdp }) => {
+    io.to(targetId).emit('voiceAnswer', { fromId: socket.id, sdp });
+  });
+
+  socket.on('voiceIce', ({ targetId, candidate }) => {
+    io.to(targetId).emit('voiceIce', { fromId: socket.id, candidate });
+  });
+
+  socket.on('voiceMuteState', ({ muted }) => {
+    const lobbyId = socket.data.lobbyId;
+    if (!lobbyId) return;
+    socket.to(lobbyId).emit('voiceMuteState', { socketId: socket.id, muted: !!muted });
+  });
+  // ===================== END VOICE CHAT =====================
+
   // ---- DISCONNECT ----
   socket.on('disconnect', () => {
+    // Notify others if player was in voice
+    if (socket.data.inVoice && socket.data.lobbyId) {
+      io.to(socket.data.lobbyId).emit('voicePeerLeft', { socketId: socket.id });
+    }
     leaveCurrentLobby(socket);
     console.log(`[disconnect] ${socket.id}`);
   });
 });
 
 // ===================== LOBBY HELPERS =====================
-
-function spawnZombieNearPlayer(playerId, lobbyId) {
-  const lobby = lobbies[lobbyId];
-  const player = lobby.players[playerId];
-
-  if (player && player.alive) {
-    const zombie = {
-      id: Math.random().toString(36).substr(2, 9), // Simple ID generator
-      x: player.x, 
-      y: player.y,
-      hp: 50,
-      targetId: playerId
-    };
-    
-    lobby.enemies.push(zombie);
-    io.to(lobbyId).emit('enemySpawned', zombie);
-  }
-}
-
 function getLobbyForSocket(socket) {
   const id = socket.data.lobbyId;
   return id ? lobbies[id] : null;
 }
+
 function leaveCurrentLobby(socket) {
   const lobbyId = socket.data.lobbyId;
   if (!lobbyId) return;
@@ -551,9 +601,7 @@ function startGame(lobbyId) {
   if (!lobby) return;
   lobby.gameActive = true;
 
-  // 1. Initialize the enemies array for this lobby
-  lobby.enemies = []; 
-
+  // Assign spawn positions spread across the map
   const players = Object.values(lobby.players);
   players.forEach((p, i) => {
     p.alive = true;
@@ -562,26 +610,22 @@ function startGame(lobbyId) {
     p.kills = 0;
     p.eliminatedAt = null;
     p.ready = false;
-
-    // Existing spawn logic
+    // Spread spawns in a ring
     const angle = (i / players.length) * Math.PI * 2;
     p.x = MAP_W / 2 + Math.cos(angle) * 800 + (Math.random() - 0.5) * 300;
     p.y = MAP_H / 2 + Math.sin(angle) * 800 + (Math.random() - 0.5) * 300;
-
-    // 2. Spawn zombie at the player's new position
-    spawnZombieNearPlayer(p.id, lobbyId);
-  }); // End of forEach
-
-  // 3. Emit the start event including enemies
-  io.to(lobbyId).emit('gameStarting', {
-    players: lobby.players,
-    enemies: lobby.enemies, 
-    mapSeed: Math.floor(Math.random() * 99999),
   });
 
+  // Tell all players the game is starting with spawn positions
+  io.to(lobbyId).emit('gameStarting', {
+    players: lobby.players,
+    mapSeed: Math.floor(Math.random() * 99999), // clients use same seed to generate same map
+  });
+
+  // Start the server-side storm
   startStorm(lobbyId);
   console.log(`[${lobbyId}] Game started with ${players.length} players.`);
-} // <--- Ensure ONLY ONE brace is here before randomColor()
+}
 
 function randomColor() {
   const colors = ['#e74c3c','#9b59b6','#1abc9c','#e67e22','#f39c12','#3498db','#2ecc71','#e91e63','#ff5722','#00bcd4'];
