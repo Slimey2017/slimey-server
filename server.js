@@ -315,6 +315,7 @@ io.on('connection', (socket) => {
       eliminatedAt: null,
       color: randomColor(),
       level: Math.floor(Math.random() * 200) + 1,
+      skin: null, // will be set on first playerUpdate
     };
     lobby.players[socket.id] = playerData;
 
@@ -381,6 +382,7 @@ io.on('connection', (socket) => {
     p.shield = data.shield ?? p.shield;
     p.angle = data.angle ?? p.angle;
     p.activeWeapon = data.activeWeapon ?? p.activeWeapon;
+    if (data.skin) p.skin = data.skin; // persist latest skin
 
     // Relay to other players
     socket.to(socket.data.lobbyId).emit('remotePlayerUpdate', {
@@ -389,6 +391,7 @@ io.on('connection', (socket) => {
       hp: p.hp, shield: p.shield,
       angle: p.angle,
       activeWeapon: p.activeWeapon,
+      skin: p.skin,
     });
   });
 
