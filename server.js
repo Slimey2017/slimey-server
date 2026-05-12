@@ -20,6 +20,7 @@ const io = new Server(server, {
 // Serve the game HTML from the same folder
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/mobile', (req, res) => res.sendFile(path.join(__dirname, 'public', 'mobile.html')));
 
 // ===================== CONSTANTS =====================
 const MAX_PLAYERS_PER_LOBBY = 35;
@@ -282,6 +283,19 @@ function endGame(lobbyId) {
 }
 
 // ===================== SOCKET EVENTS =====================
+// ===================== RATE LIMITING =====================
+const rateLimits = new Map(); // socketId -> { hits, resetAt }
+function checkRate(socketId, key, maxPerSec = 20) {
+  const now = Date.now();
+  const k = socketId + ':' + key;
+  let rl = rateLimits.get(k);
+  if (!rl || now > rl.resetAt) { rl = { hits: 0, resetAt: now + 1000 }; rateLimits.set(k, rl); }
+  rl.hits++;
+  return rl.hits <= maxPerSec;
+}
+// Clean up stale rate limit entries every 30s
+setInterval(() => { const now = Date.now(); rateLimits.forEach((v, k) => { if (now > v.resetAt + 5000) rateLimits.delete(k); }); }, 30000);
+
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
@@ -370,6 +384,7 @@ io.on('connection', (socket) => {
   // ---- PLAYER POSITION UPDATE (in-game) ----
   // Broadcast to all others in lobby — server trusts client position for now
   socket.on('playerUpdate', (data) => {
+    if (!checkRate(socket.id, 'playerUpdate', 25)) return; // max 25/s
     const lobby = getLobbyForSocket(socket);
     if (!lobby || !lobby.gameActive) return;
     const p = lobby.players[socket.id];
@@ -397,6 +412,7 @@ io.on('connection', (socket) => {
 
   // ---- BULLET FIRED ----
   socket.on('bulletFired', (data) => {
+    if (!checkRate(socket.id, 'bulletFired', 30)) return; // max 30/s (minigun fires ~17/s)
     const lobby = getLobbyForSocket(socket);
     if (!lobby || !lobby.gameActive) return;
     // Relay bullet to all other players
@@ -409,6 +425,7 @@ io.on('connection', (socket) => {
 
   // ---- HIT REPORT (client reports a hit, server validates loosely) ----
   socket.on('reportHit', ({ targetId, damage, weaponKey }) => {
+    if (!checkRate(socket.id, 'reportHit', 15)) return;
     const lobby = getLobbyForSocket(socket);
     if (!lobby || !lobby.gameActive) return;
     const target = lobby.players[targetId];
@@ -420,8 +437,14 @@ io.on('connection', (socket) => {
     const MAX_RANGE = 1400; // sniper max range
     if (dist > MAX_RANGE) return; // reject out-of-range hits
 
-    // Clamp damage to weapon max
-    const WEAPON_MAX_DAMAGE = { pistol:25, ar:20, shotgun:108, sniper:120, smg:14, rocket:80, minigun:12 };
+    // Clamp damage to weapon max (covers all client weapons)
+    const WEAPON_MAX_DAMAGE = {
+      pistol:25, ar:20, shotgun:108, sniper:120, smg:14, rocket:80, minigun:12,
+      crossbow:60, grenade:70, landmine:80, knife:50, bat:35, flamethrower:8,
+      boomerang:30, deployshield:0, poisondart:10, smokegrenade:0,
+      dualpistols:18, laserrifle:35, chainsaw:6, sledgehammer:90,
+      icecannon:15, railgun:150, burstrifle:22, shockwave:40,
+    };
     const maxDmg = WEAPON_MAX_DAMAGE[weaponKey] || 30;
     const clampedDmg = Math.min(damage, maxDmg);
 
@@ -532,6 +555,11 @@ io.on('connection', (socket) => {
   });
   // ===================== END VOICE CHAT =====================
 
+  // ---- LEAVE LOBBY (explicit, before disconnect) ----
+  socket.on('leaveLobby', () => {
+    leaveCurrentLobby(socket);
+  });
+
   // ---- DISCONNECT ----
   socket.on('disconnect', () => {
     // Notify others if player was in voice
@@ -613,10 +641,11 @@ function startGame(lobbyId) {
     p.kills = 0;
     p.eliminatedAt = null;
     p.ready = false;
-    // Spread spawns in a ring
+    // Spread spawns in a large ring so players don't land on top of each other
     const angle = (i / players.length) * Math.PI * 2;
-    p.x = MAP_W / 2 + Math.cos(angle) * 800 + (Math.random() - 0.5) * 300;
-    p.y = MAP_H / 2 + Math.sin(angle) * 800 + (Math.random() - 0.5) * 300;
+    const radius = 1200 + Math.random() * 600;
+    p.x = Math.max(200, Math.min(MAP_W - 200, MAP_W / 2 + Math.cos(angle) * radius + (Math.random() - 0.5) * 400));
+    p.y = Math.max(200, Math.min(MAP_H - 200, MAP_H / 2 + Math.sin(angle) * radius + (Math.random() - 0.5) * 400));
   });
 
   // Tell all players the game is starting with spawn positions
@@ -635,10 +664,32 @@ function randomColor() {
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
+// ===================== HEALTH & STATS ENDPOINT =====================
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    lobbies: Object.keys(lobbies).length,
+    totalPlayers: getTotalOnline(),
+    activeGames: Object.values(lobbies).filter(l => l.gameActive).length,
+  });
+});
+
 // ===================== START SERVER =====================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`\n🟢 Slimey's Battle Royale server running on port ${PORT}`);
   console.log(`   Open: http://localhost:${PORT}`);
+  console.log(`   Mobile: http://localhost:${PORT}/mobile`);
+  console.log(`   Health: http://localhost:${PORT}/health`);
   console.log(`   Lobbies: ${SERVER_ROOMS.length} active\n`);
 });
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('\n🔴 SIGTERM received — shutting down gracefully...');
+  io.emit('serverShutdown', { message: 'Server is restarting. Please reconnect shortly.' });
+  server.close(() => { console.log('Server closed.'); process.exit(0); });
+  setTimeout(() => process.exit(1), 5000); // force quit after 5s
+});
+process.on('SIGINT', () => process.emit('SIGTERM'));
