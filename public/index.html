@@ -11,7 +11,7 @@
   *{margin:0;padding:0;box-sizing:border-box;}
   :root{--neon:#00ffe7;--gold:#f1c40f;--dark:#050a0f;--panel:rgba(5,15,25,0.92);--border:rgba(0,255,231,0.25);}
   body{background:var(--dark);overflow:hidden;font-family:'Oswald',sans-serif;}
-  body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);pointer-events:none;z-index:9999;}
+  body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,var(--scanline-opacity,0.07)) 2px,rgba(0,0,0,var(--scanline-opacity,0.07)) 4px);pointer-events:none;z-index:9999;}
   .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:50;}
   .screen.active{display:flex;}
   #titleScreen{background:radial-gradient(ellipse at 50% 40%,#0a1a2e 0%,#050a0f 70%);}
@@ -153,7 +153,7 @@
   #gameContainer.active{display:block;}
   canvas{display:block;}
   #ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
-  #statsPanel{position:absolute;bottom:85px;left:20px;width:240px;background:rgba(0,5,10,0.85);border:1px solid rgba(0,255,231,0.2);border-radius:8px;padding:10px 14px;backdrop-filter:blur(6px);}
+  #statsPanel{position:absolute;bottom:85px;left:20px;width:240px;background:rgba(0,5,10,0.85);border:1px solid rgba(0,255,231,0.2);border-radius:8px;padding:10px 14px;backdrop-filter:blur(6px);transform-origin:bottom left;}
   #statsPanel .player-name-hud{font-family:'Bangers',cursive;font-size:18px;color:var(--neon);letter-spacing:2px;margin-bottom:8px;}
   #healthBar{margin-bottom:7px;}
   .bar-label{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;display:flex;justify-content:space-between;align-items:center;}
@@ -163,7 +163,7 @@
   .bar-fill::after{content:'';position:absolute;top:0;left:0;right:0;height:40%;background:rgba(255,255,255,0.15);border-radius:3px 3px 0 0;}
   #hp-fill{background:linear-gradient(90deg,#c0392b,#e74c3c 60%,#ff6b6b);}
   #sh-fill{background:linear-gradient(90deg,#1a5276,#2980b9 60%,#74b9ff);}
-  #inventory{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;}
+  #inventory{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;transform-origin:bottom center;}
   .inv-slot{width:60px;height:60px;background:rgba(0,5,15,0.88);border:2px solid #333;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;transition:all 0.1s;}
   .inv-slot.active{border-color:var(--gold);box-shadow:0 0 12px rgba(241,196,15,0.3);}
   .inv-slot .slot-num{position:absolute;top:2px;left:5px;font-size:10px;color:#555;font-family:'Share Tech Mono',monospace;}
@@ -820,7 +820,8 @@ function setRegion(r, btn) {
   renderServerList();
 }
 
-function filterServers() { renderServerList(); }
+let _searchTimer;
+function filterServers() { clearTimeout(_searchTimer); _searchTimer = setTimeout(renderServerList, 150); }
 
 function renderServerList() {
   const search = document.getElementById('serverSearch').value.toLowerCase();
@@ -907,8 +908,8 @@ function renderServerList() {
       <div class="srv-region">${srv.region}</div>
       <div class="srv-players"><span class="cnt">${srv.playerCount}</span><span class="max">/${srv.maxP}</span></div>
       <div class="srv-ping ${pingClass}">${ping}${typeof ping==='number'?'ms':''}</div>
-      <button class="srv-join" ${full?'disabled style="opacity:0.4;cursor:not-allowed"':''} onclick="joinServer('${srv.id}','${srv.name}','${srv.region}')">
-        ${full?'FULL':'JOIN ▶'}
+      <button class="srv-join" ${full?'disabled style="opacity:0.4;cursor:not-allowed"':''} ${srv.gameActive?'disabled style="opacity:0.5;cursor:not-allowed"':''} onclick="if(!this.disabled){this.textContent='JOINING...';this.disabled=true;joinServer('${srv.id}','${srv.name}','${srv.region}');}">
+        ${full?'FULL':srv.gameActive?'IN PROGRESS':'JOIN ▶'}
       </button>`;
     list.appendChild(row);
   });
@@ -1126,6 +1127,7 @@ function showScreen(id) {
 function confirmUsername() {
   const val = document.getElementById('usernameInput').value.trim().toUpperCase();
   playerUsername = val || 'SLIMEY';
+  try { localStorage.setItem('slimeyPlayerName', playerUsername); } catch(e) {}
   document.getElementById('usernameOverlay').classList.remove('active');
   const titleObj=ALL_TITLES.find(t=>t.id===(playerSkin.titleId||'none'));
   const titleStr=titleObj&&titleObj.id!=='none'?' · '+titleObj.icon+titleObj.name:'';
@@ -1283,7 +1285,8 @@ function addLiveGameChat(name, msg, color) {
   div.className = 'game-chat-msg';
   div.innerHTML = `<span class="gcm-name" style="color:${color}">${name}:</span> ${msg}`;
   container.appendChild(div);
-  setTimeout(() => div.remove(), 5000);
+  while(container.children.length > 50) container.removeChild(container.firstChild);
+  setTimeout(() => { if(div.parentNode) div.remove(); }, 5000);
 }
 
 // ===================== CANVAS & GAME =====================
@@ -2554,7 +2557,7 @@ function tryShoot(entity,targetAngle){
 // Floating texts
 let floatingTexts=[];
 function addFloatingText(x,y,text,color='#fff'){if(!S.dmgnums)return;floatingTexts.push({x,y,text,color,life:1.5,vy:-40});}
-function addKillFeed(msg,type='enemy-kill'){const div=document.createElement('div');div.className='kill-msg '+type;div.textContent=msg;document.getElementById('killFeed').appendChild(div);setTimeout(()=>div.remove(),3100);}
+function addKillFeed(msg,type='enemy-kill'){const div=document.createElement('div');div.className='kill-msg '+type;div.textContent=msg;const kf=document.getElementById('killFeed');kf.appendChild(div);div.addEventListener('animationend',()=>div.remove());setTimeout(()=>{if(div.parentNode)div.remove();},3200);}
 
 // Game state
 let gameRunning=false,gameOver=false,lastTime=0;
@@ -2700,6 +2703,10 @@ function startSoloGame() {
   serverStorm={centerX:MAP_W/2,centerY:MAP_H/2,radius:MAP_W*1.06,targetRadius:MAP_W*0.76,phase:1,phaseTimer:0,phaseDuration:60,damagePerSec:5};
   gameOver=false;gameRunning=true;
   updateCamera();
+  // Spawn solo practice bots
+  initSoloBots(12);
+  // Update alive count after a moment (bots spawn with delays)
+  setTimeout(updateAliveCountSolo, 200);
   // Local solo storm tick
   soloStormTick();
 }
@@ -2740,7 +2747,234 @@ function soloStormTick(){
   },100);
 }
 
-// ===================== ZOMBIE BOT SYSTEM =====================
+// ===================== SOLO PRACTICE BOT SYSTEM =====================
+const BOT_NAMES = ['BOTLEY','SLIMBOT','AI-47','ROBO-S','DROID-X','AUTO-K','MECH-7','NEURAL','CYBER-Q','PIXEL','GRID-Z','NANO-T','VOXEL','BYTE-R','CORE-9','NEXUS','ALPHA-B','OMNI','PROTO','DELTA'];
+const BOT_COLORS = ['#e74c3c','#3498db','#9b59b6','#e67e22','#1abc9c','#e91e63','#ff5722','#00bcd4','#8bc34a','#ffc107'];
+let soloBots = [];
+let soloBotIdCounter = 0;
+
+function initSoloBots(count) {
+  soloBots = [];
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => spawnSoloBot(), i * 500);
+  }
+}
+
+function spawnSoloBot() {
+  if (!gameRunning) return;
+  const id = 'solobot_' + (soloBotIdCounter++);
+  const colorEntry = SKIN_COLORS[Math.floor(Math.random() * SKIN_COLORS.length)];
+  const botColor = colorEntry.color;
+  // Spawn far from player
+  let sx, sy, attempts = 0;
+  do {
+    sx = 200 + Math.random() * (MAP_W - 400);
+    sy = 200 + Math.random() * (MAP_H - 400);
+    attempts++;
+  } while (attempts < 20 && Math.hypot(sx - player.x, sy - player.y) < 600);
+  const safe = nudgeOutOfWall(sx, sy, 18);
+  const botWeaponKeys = ['pistol','ar','shotgun','smg','crossbow'];
+  const wKey = botWeaponKeys[Math.floor(Math.random() * botWeaponKeys.length)];
+  const wDef = WEAPONS[wKey];
+  const bot = {
+    id, x: safe.x, y: safe.y, hp: 100, maxHp: 100, shield: 0,
+    alive: true, angle: 0, radius: 14,
+    name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
+    color: botColor, colorId: colorEntry.id,
+    skin: { colorId: colorEntry.id, faceId: ['normal','cool','angry','happy'][Math.floor(Math.random()*4)], hatId: 'none', weaponColorId: 'default', trailId: 'none' },
+    // AI state
+    state: 'roam',       // roam | chase | flee | loot
+    target: null,        // {x,y} or player ref
+    stateTimer: 2 + Math.random() * 4,
+    fireTimer: 0,
+    reloadTimer: 0,
+    weapon: { key: wKey, ...wDef, currentAmmo: wDef.ammo, maxAmmo: wDef.ammo },
+    moveAngle: Math.random() * Math.PI * 2,
+    stuckTimer: 0,
+    lastX: safe.x, lastY: safe.y,
+    score: 0,
+    isBot: true,
+  };
+  soloBots.push(bot);
+  remotePlayers[id] = {
+    x: safe.x, y: safe.y, targetX: safe.x, targetY: safe.y,
+    hp: 100, shield: 0, name: bot.name, color: botColor,
+    alive: true, angle: 0, radius: 14, skin: bot.skin, isBot: true
+  };
+  updateAliveCountSolo();
+}
+
+function updateAliveCountSolo() {
+  const alive = soloBots.filter(b => b.alive).length + (player.alive ? 1 : 0);
+  document.getElementById('aliveCount').textContent = alive;
+}
+
+function updateSoloBots(dt) {
+  if (!gameRunning || !myLobbyId === false) return; // only in solo (no lobby)
+  if (soloBots.length === 0) return;
+
+  soloBots.forEach(bot => {
+    if (!bot.alive) return;
+    const rp = remotePlayers[bot.id];
+    if (!rp) { bot.alive = false; return; }
+
+    bot.stateTimer -= dt;
+    bot.fireTimer = Math.max(0, bot.fireTimer - dt);
+    if (bot.reloadTimer > 0) { bot.reloadTimer -= dt; if (bot.reloadTimer <= 0) { bot.weapon.currentAmmo = bot.weapon.maxAmmo; } }
+
+    const distToPlayer = Math.hypot(bot.x - player.x, bot.y - player.y);
+    const canSeePlayer = distToPlayer < 700 && player.alive;
+
+    // State transitions
+    if (bot.stateTimer <= 0) {
+      if (canSeePlayer && bot.hp > 30) { bot.state = 'chase'; bot.stateTimer = 3 + Math.random() * 3; }
+      else if (bot.hp <= 30) { bot.state = 'flee'; bot.stateTimer = 4; }
+      else { bot.state = 'roam'; bot.stateTimer = 2 + Math.random() * 4; bot.moveAngle = Math.random() * Math.PI * 2; }
+    }
+    if (canSeePlayer && bot.hp > 40 && bot.state === 'roam') { bot.state = 'chase'; bot.stateTimer = 3; }
+    if (bot.hp <= 25 && bot.state === 'chase') { bot.state = 'flee'; bot.stateTimer = 5; }
+
+    // Movement
+    let dx = 0, dy = 0;
+    const speed = 160;
+
+    if (bot.state === 'chase' && player.alive) {
+      bot.angle = Math.atan2(player.y - bot.y, player.x - bot.x);
+      // Strafe slightly while chasing
+      const strafe = Math.sin(Date.now() / 600 + bot.id.charCodeAt(7) || 0) * 0.6;
+      dx = Math.cos(bot.angle + strafe);
+      dy = Math.sin(bot.angle + strafe);
+      // Stop and shoot at medium range
+      if (distToPlayer < 300 && distToPlayer > 80) { dx *= 0.3; dy *= 0.3; }
+      if (distToPlayer < 60) { dx = -Math.cos(bot.angle); dy = -Math.sin(bot.angle); } // back off if too close
+    } else if (bot.state === 'flee') {
+      bot.angle = Math.atan2(player.y - bot.y, player.x - bot.x);
+      dx = -Math.cos(bot.angle);
+      dy = -Math.sin(bot.angle);
+    } else {
+      // Roam
+      dx = Math.cos(bot.moveAngle);
+      dy = Math.sin(bot.moveAngle);
+    }
+
+    // Stuck detection
+    const moved = Math.hypot(bot.x - bot.lastX, bot.y - bot.lastY);
+    bot.stuckTimer = moved < 2 ? bot.stuckTimer + dt : 0;
+    if (bot.stuckTimer > 1.5) { bot.moveAngle = Math.random() * Math.PI * 2; bot.stuckTimer = 0; }
+    bot.lastX = bot.x; bot.lastY = bot.y;
+
+    // Storm avoidance - move toward storm center if outside
+    const s = serverStorm;
+    const distToStormCenter = Math.hypot(bot.x - s.centerX, bot.y - s.centerY);
+    if (distToStormCenter > s.radius * 0.85 && bot.state !== 'chase') {
+      dx = (s.centerX - bot.x) / distToStormCenter;
+      dy = (s.centerY - bot.y) / distToStormCenter;
+    }
+
+    // Apply movement
+    const len = Math.hypot(dx, dy);
+    if (len > 0) {
+      const nx = bot.x + (dx / len) * speed * dt;
+      const ny = bot.y + (dy / len) * speed * dt;
+      const pos = resolveCollision({ x: bot.x, y: bot.y, radius: bot.radius }, nx, ny);
+      bot.x = Math.max(bot.radius, Math.min(MAP_W - bot.radius, pos.x));
+      bot.y = Math.max(bot.radius, Math.min(MAP_H - bot.radius, pos.y));
+    }
+
+    // Shooting at player — damage is applied on bullet ARRIVAL (in the bullet loop), not at fire time
+    if (canSeePlayer && distToPlayer < 600 && bot.state === 'chase' && bot.fireTimer <= 0 && bot.reloadTimer <= 0) {
+      if (bot.weapon.currentAmmo > 0) {
+        bot.angle = Math.atan2(player.y - bot.y, player.x - bot.x);
+        bot.fireTimer = (bot.weapon.fireRate || 500) / 1000;
+        // Accuracy spread: bots miss more at long range (~40-70% hit chance baked into spread)
+        const accuracy = Math.max(0.35, 1 - distToPlayer / 950);
+        const spread = (bot.weapon.spread || 0.05) + (1 - accuracy) * 0.35;
+        const bulletAngle = bot.angle + (Math.random() - 0.5) * spread * 2;
+        // Damage carried by the bullet — walls will stop it before it reaches player
+        const dmg = Math.round((bot.weapon.damage || 20) * (0.6 + accuracy * 0.4));
+        bullets.push({
+          x: bot.x, y: bot.y,
+          vx: Math.cos(bulletAngle) * (bot.weapon.speed || 900),
+          vy: Math.sin(bulletAngle) * (bot.weapon.speed || 900),
+          owner: bot,
+          damage: dmg,
+          range: bot.weapon.range || 700,
+          distTraveled: 0, splash: 0,
+          weaponKey: bot.weapon.key,
+          alive: true, isPoison: false, pierce: false,
+          isBotBullet: true
+        });
+        bot.weapon.currentAmmo--;
+        playDirectionalSound('shoot', bot.x, bot.y);
+      } else if (bot.reloadTimer <= 0) {
+        bot.reloadTimer = (bot.weapon.reloadTime || 1500) / 1000;
+      }
+    }
+
+    // Storm damage to bot
+    if (distToStormCenter > s.radius && bot.alive) {
+      bot.hp -= (s.damagePerSec || 5) * dt;
+      if (bot.hp <= 0) { killBot(bot.id, 'storm'); return; }
+    }
+
+    // Sync to remotePlayers for rendering
+    rp.x = bot.x; rp.y = bot.y;
+    rp.targetX = bot.x; rp.targetY = bot.y;
+    rp.hp = bot.hp; rp.angle = bot.angle;
+    rp.alive = bot.alive;
+  });
+
+  // Bot vs bot (simplified — bots occasionally kill each other)
+  for (let i = 0; i < soloBots.length; i++) {
+    const a = soloBots[i]; if (!a.alive) continue;
+    for (let j = i + 1; j < soloBots.length; j++) {
+      const b = soloBots[j]; if (!b.alive) continue;
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < 350 && Math.random() < 0.002) { // very small per-frame chance
+        const dmg = 15 + Math.random() * 20;
+        b.hp -= dmg;
+        if (b.hp <= 0) { killBot(b.id, a.name); }
+      }
+    }
+  }
+}
+
+function killBot(botId, killedBy) {
+  const bot = soloBots.find(b => b.id === botId);
+  if (!bot || !bot.alive) return;
+  bot.alive = false;
+  const rp = remotePlayers[botId];
+  if (rp) { rp.alive = false; rp.hp = 0; }
+  const col = SKIN_COLORS.find(sc => sc.id === (bot.colorId || 'green'))?.color || '#e74c3c';
+  spawnDeathAnim(bot.x, bot.y, col, 'splat');
+  spawnBlood(bot.x, bot.y);
+  const isPlayerKill = killedBy === playerUsername || killedBy === player;
+  if (isPlayerKill) {
+    addKillFeed(`💀 You eliminated ${bot.name}`, 'player-kill');
+    player.score++;
+    player.kills.push({ name: bot.name, time: Date.now() });
+    addKillToStreak();
+    tickChallenge('kills', 1);
+    if (!matchStats.firstKillDone) { matchStats.firstKillDone = true; checkTitleUnlock('firstblood'); }
+  } else {
+    addKillFeed(`⚔️ ${killedBy} eliminated ${bot.name}`, 'enemy-kill');
+  }
+  setTimeout(() => { delete remotePlayers[botId]; }, 2000);
+  updateAliveCountSolo();
+  // Check win condition - player is last one alive
+  const aliveBots = soloBots.filter(b => b.alive).length;
+  if (aliveBots === 0 && player.alive) {
+    setTimeout(() => { endGame(true, playerUsername, null); }, 800);
+  }
+}
+
+// Hook bullet hits to detect bot kills
+const _origBulletHitCheck = null; // handled inline in update() bot bullet section
+
+// Patch update() to also call updateSoloBots
+const _origUpdate = update;
+
+
 let zombieBots = [];
 let zombieSpawnTimer = 0;
 const ZOMBIE_SPAWN_INTERVAL = 3; // seconds between zombie spawns
@@ -2893,6 +3127,8 @@ function update(dt){
   updateSmoke(dt);
   // Zombie bots
   updateZombieBots(dt);
+  // Solo practice bots
+  if (!myLobbyId) updateSoloBots(dt);
   if(spectating){
     const t=spectateTargets[spectateIdx];
     if(t&&t.alive){cam.x=t.x-canvas.width/(2*scopeZoom);cam.y=t.y-canvas.height/(2*scopeZoom);cam.x=Math.max(0,Math.min(MAP_W-canvas.width/scopeZoom,cam.x));cam.y=Math.max(0,Math.min(MAP_H-canvas.height/scopeZoom,cam.y));}
@@ -2932,7 +3168,7 @@ function update(dt){
       for(const c of lootCrates){if(!c.opened&&Math.hypot(b.x-c.x,b.y-c.y)<c.r+8){c.hp--;spawnParticle(c.x,c.y,'#f1c40f',3,80,0.3,3);if(c.hp<=0){c.opened=true;const count=2+Math.floor(Math.random()*2);for(let i=0;i<count;i++){const wKey=WEAPON_POOL[Math.floor(Math.random()*WEAPON_POOL.length)];const def=WEAPONS[wKey];const item={x:c.x+(Math.random()-0.5)*60,y:c.y+(Math.random()-0.5)*60,key:wKey,...def};if(!def.isHeal)item.currentAmmo=def.ammo;groundItems.push(item);}spawnExplosion(c.x,c.y);addFloatingText(c.x,c.y-30,'📦 CRATE OPENED!','#f1c40f');playSound('pickup');}break;}}
       return;
     }
-    // For OUR bullets hitting remote players — report to server
+    // For OUR bullets hitting remote players — report to server OR hit solo bot locally
     if(b.owner===player){
       Object.entries(remotePlayers).forEach(([id,rp])=>{
         if(!rp.alive||!b.alive) return;
@@ -2941,12 +3177,42 @@ function update(dt){
           if(b.splash) spawnExplosion(b.x,b.y);
           if(rp.isZombie){
             hitZombie(id,b.damage);
+          } else if(rp.isBot) {
+            // Solo practice bot — damage locally
+            const bot = soloBots.find(bot=>bot.id===id);
+            if(bot && bot.alive){
+              bot.hp -= b.damage;
+              spawnParticle(b.x,b.y,rp.color||'#e74c3c',5,120,0.4,4);
+              addFloatingText(b.x,b.y-20,`-${Math.round(b.damage)}`,'#fff');
+              playSound('hitbeep');
+              rp.hp = bot.hp;
+              if(bot.hp <= 0){ killBot(id, playerUsername); }
+            }
+            if(b.isPoison && bot && bot.alive) bot.hp -= 3; // simple poison
           } else {
             socket.emit('reportHit',{targetId:id,damage:b.damage,weaponKey:b.weaponKey});
             if(b.isPoison)applyPoison(id,5);
           }
         }
       });
+    }
+    // For BOT bullets hitting the player — walls already stopped them via isSolidAt above
+    if(b.isBotBullet && b.owner && b.owner.isBot && b.alive && player.alive){
+      if(Math.hypot(b.x-player.x,b.y-player.y)<player.radius+4){
+        b.alive=false;
+        if(b.damage>0){
+          let dmg=b.damage;
+          if(player.shield>0){const sh=Math.min(player.shield,dmg*0.5);player.shield-=sh;dmg-=sh;}
+          player.hp=Math.max(0,player.hp-dmg);
+          matchStats.noHit=false;
+          document.getElementById('dmgFlash').style.background='rgba(231,76,60,0.35)';
+          setTimeout(()=>document.getElementById('dmgFlash').style.background='',150);
+          playSound('hit');
+          spawnParticle(player.x,player.y,'#e74c3c',6,100,0.4,4);
+          addFloatingText(player.x,player.y-20,`-${Math.round(dmg)}`,'#e74c3c');
+          if(player.hp<=0){player.hp=0;player.alive=false;lastKillerName=b.owner.name;}
+        }
+      }
     }
   });
   bullets=bullets.filter(b=>b.alive);
@@ -3262,7 +3528,17 @@ function render(){
     if(b.weaponKey==='laserrifle'||b.weaponKey==='railgun'){ctx.strokeStyle=b.weaponKey==='railgun'?'#9b59b6':'#00ffe7';ctx.lineWidth=b.weaponKey==='railgun'?4:2;ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=8;ctx.beginPath();ctx.moveTo(b.x-Math.cos(Math.atan2(b.vy,b.vx))*12,b.y-Math.sin(Math.atan2(b.vy,b.vx))*12);ctx.lineTo(b.x,b.y);ctx.stroke();}
     else if(b.weaponKey==='icecannon'){ctx.fillStyle='#74b9ff';ctx.beginPath();ctx.arc(b.x,b.y,5,0,Math.PI*2);ctx.fill();}
     else if(b.weaponKey==='rocket'){ctx.fillStyle='#e67e22';ctx.beginPath();ctx.arc(b.x,b.y,5,0,Math.PI*2);ctx.fill();spawnParticle(b.x,b.y,'#e67e22',1,30,0.2,3);}
-    else{ctx.fillStyle='#f1c40f';ctx.beginPath();ctx.arc(b.x,b.y,3,0,Math.PI*2);ctx.fill();}
+    else{
+      if(b.isBotBullet){
+        // Bot bullets — red/orange so player can see them coming
+        ctx.fillStyle='#ff4444';
+        ctx.shadowColor='#ff0000';ctx.shadowBlur=6;
+        ctx.beginPath();ctx.arc(b.x,b.y,4,0,Math.PI*2);ctx.fill();
+        ctx.shadowBlur=0;
+      } else {
+        ctx.fillStyle='#f1c40f';ctx.beginPath();ctx.arc(b.x,b.y,3,0,Math.PI*2);ctx.fill();
+      }
+    }
     ctx.restore();});
   particles.forEach(p=>{ctx.globalAlpha=p.life/p.maxLife;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size*(p.life/p.maxLife),0,Math.PI*2);ctx.fill();});ctx.globalAlpha=1;
   // Draw trail particles
@@ -3409,6 +3685,7 @@ function gameLoop(ts){
 
 function endGame(win, winnerName, results) {
   gameRunning=false;
+  soloBots=[];
   zombieBots=[];zombieSpawnTimer=0;
   stopPosSending();
   if(soloStormInterval) clearInterval(soloStormInterval);
@@ -3491,6 +3768,14 @@ function goToMainMenu(){
 lastTime=performance.now();
 requestAnimationFrame(gameLoop);
 loadSettings();
+// Restore saved name
+try {
+  const saved = localStorage.getItem('slimeyPlayerName');
+  if (saved) {
+    playerUsername = saved;
+    document.getElementById('usernameInput').value = saved;
+  }
+} catch(e) {}
 
 // ===== SKINS SYSTEM =====
 const SKIN_COLORS = [
@@ -4087,16 +4372,22 @@ socket.on('joinedLobby', (data) => {
 });
 
 // Clean up when leaving lobby
-const _origLeaveLobby = window.leaveLobby;
-if (typeof window.leaveLobby === 'function') {
-  window.leaveLobby = function() {
-    VC.cleanup();
-    _origLeaveLobby.call(this);
-  };
-}
+document.addEventListener('DOMContentLoaded', () => {
+  const _origLeaveLobby = window.leaveLobby;
+  if (typeof window.leaveLobby === 'function') {
+    window.leaveLobby = function() {
+      VC.cleanup();
+      _origLeaveLobby.call(this);
+    };
+  }
+});
 
 // Also init on page load in case socket is already connected
-VC.init();
+if(document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => VC.init());
+} else {
+  VC.init();
+}
 </script>
 </body>
 </html>
